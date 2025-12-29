@@ -1,0 +1,8 @@
+{
+  "name": "클레이 공감 퀴즈",
+  "description": "실시간 조별 성향 공감 게임. 클레이모피즘 스타일의 UI와 진동 피드백을 통해 교육생간의 유대감을 높입니다.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
