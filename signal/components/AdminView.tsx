@@ -132,59 +132,44 @@ const AdminView: React.FC<Props> = ({
         )}
       </div>
 
-      {/* 팀별 순위 및 개인 점수 */}
-      <div className="brutal-card p-6">
+      {/* 팀별 순위 및 개인 점수 - 그리드 레이아웃 */}
+      <div className="brutal-card p-4">
         <h3 className="text-xl font-black mb-4 border-b-4 border-black pb-2">
           팀별 순위 및 개인 점수
         </h3>
 
-        <div className="space-y-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
           {sortedTeams.map((teamName, teamRank) => {
             const data = getTeamData(teamName);
 
             return (
-              <div key={teamName} className="border-4 border-black bg-white">
-                {/* 팀 헤더 */}
-                <div className="p-4 flex justify-between items-center bg-slate-100 border-b-4 border-black">
-                  <div className="flex items-center gap-4">
-                    <span className={`w-10 h-10 flex items-center justify-center font-black text-lg border-2 border-black ${
-                      teamRank === 0 ? 'bg-yellow-300' : teamRank === 1 ? 'bg-slate-300' : teamRank === 2 ? 'bg-orange-300' : 'bg-white'
-                    }`}>
-                      {teamRank + 1}
-                    </span>
-                    <div className="text-left">
-                      <p className="font-black text-lg">{teamName}</p>
-                      <p className="text-xs text-gray-500">
-                        {data.members.length}명 · 라운드 {data.rounds} · 주인공 {data.herosDone}회
+              <div key={teamName} className="border-4 border-black bg-white flex flex-col">
+                {/* 팀 헤더 - 컴팩트 */}
+                <div className={`p-3 border-b-4 border-black ${
+                  teamRank === 0 ? 'bg-yellow-300' : teamRank === 1 ? 'bg-slate-200' : teamRank === 2 ? 'bg-orange-200' : 'bg-slate-100'
+                }`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-black text-lg">{teamRank + 1}위 {teamName}</p>
+                      <p className="text-xs text-gray-600">
+                        {data.members.length}명 · R{data.rounds}
                       </p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    {gameState?.isStarted && (
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500">현재 주인공</p>
-                        <p className="font-bold">{data.hero?.name || '-'}</p>
-                      </div>
-                    )}
                     <div className="text-right">
-                      <p className="text-xs text-gray-500">팀 총점</p>
                       <p className="font-black text-2xl text-indigo-600">{data.totalScore}</p>
+                      {gameState?.isStarted && data.hero && (
+                        <p className="text-xs">⭐{data.hero.name}</p>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* 개인 점수 (항상 표시) */}
-                <div className="p-4 bg-white">
+                {/* 개인 점수 - 컴팩트 리스트 */}
+                <div className="p-2 bg-white flex-1 overflow-y-auto max-h-[300px]">
                   {data.teamScores.length === 0 ? (
-                    <p className="text-center text-gray-500 py-4">아직 팀원이 없습니다</p>
+                    <p className="text-center text-gray-400 py-4 text-sm">팀원 없음</p>
                   ) : (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-12 gap-2 text-xs font-bold text-gray-500 px-2">
-                        <span className="col-span-1">순위</span>
-                        <span className="col-span-5">이름</span>
-                        <span className="col-span-3 text-center">상태</span>
-                        <span className="col-span-3 text-right">점수</span>
-                      </div>
+                    <div className="space-y-1">
                       {data.teamScores.map((member, idx) => {
                         const isCurrentHero = currentHeroId[teamName] === member.id;
                         const wasHero = heroHistory[teamName]?.includes(member.id);
@@ -192,25 +177,16 @@ const AdminView: React.FC<Props> = ({
                         return (
                           <div
                             key={member.id}
-                            className={`grid grid-cols-12 gap-2 items-center px-2 py-2 ${
-                              isCurrentHero ? 'bg-yellow-200 border-2 border-yellow-500' : 'bg-slate-50 border-2 border-transparent'
+                            className={`flex justify-between items-center px-2 py-1 text-sm ${
+                              isCurrentHero ? 'bg-yellow-200 border-l-4 border-yellow-500' : 'bg-slate-50'
                             }`}
                           >
-                            <span className="col-span-1 font-black">{idx + 1}</span>
-                            <span className="col-span-5 font-bold truncate">
-                              {isCurrentHero && '⭐ '}{member.name}
+                            <span className="font-bold truncate flex-1">
+                              {idx + 1}. {isCurrentHero && '⭐'}{member.name}
+                              {wasHero && !isCurrentHero && <span className="text-gray-400 ml-1">★</span>}
                             </span>
-                            <span className="col-span-3 text-center text-xs">
-                              {isCurrentHero ? (
-                                <span className="bg-yellow-300 px-2 py-1 font-bold">주인공</span>
-                              ) : wasHero ? (
-                                <span className="text-gray-500">완료 ★</span>
-                              ) : (
-                                <span className="text-gray-400">대기</span>
-                              )}
-                            </span>
-                            <span className="col-span-3 text-right font-black text-lg text-indigo-600">
-                              {member.score}점
+                            <span className="font-black text-indigo-600 ml-2">
+                              {member.score}
                             </span>
                           </div>
                         );
