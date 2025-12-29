@@ -91,6 +91,20 @@ const TraineeView: React.FC<Props> = ({
     }
   }, [isResultRevealed, revealedAt]);
 
+  // 주인공으로 선택되었을 때 진동
+  useEffect(() => {
+    if (isHero && gameState?.isStarted) {
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]); // 진동 패턴
+    }
+  }, [isHero, gameState?.isStarted]);
+
+  // 정답 맞췄을 때 진동
+  useEffect(() => {
+    if (isResultRevealed && myAnswer && heroAnswer && myAnswer === heroAnswer) {
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 100]); // 정답 축하 진동
+    }
+  }, [isResultRevealed, myAnswer, heroAnswer]);
+
   // 팀원 점수 계산 및 정렬
   const getTeamScores = () => {
     return teamMembers
