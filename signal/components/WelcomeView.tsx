@@ -14,6 +14,7 @@ type ViewMode = 'select' | 'admin' | 'participant';
 
 const WelcomeView: React.FC<Props> = ({ roomExists, roomConfig, onAdminLogin, onParticipantLogin }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('select');
+  const [isPasswordVerified, setIsPasswordVerified] = useState(false);
 
   // 참가자 상태
   const [name, setName] = useState('');
@@ -30,6 +31,16 @@ const WelcomeView: React.FC<Props> = ({ roomExists, roomConfig, onAdminLogin, on
   const [isLoading, setIsLoading] = useState(false);
 
   const ADMIN_PASSWORD = '6749467';
+
+  const handlePasswordCheck = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === ADMIN_PASSWORD) {
+      setIsPasswordVerified(true);
+      setError('');
+    } else {
+      setError('비밀번호가 올바르지 않습니다.');
+    }
+  };
 
   const handleParticipantSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,10 +65,6 @@ const WelcomeView: React.FC<Props> = ({ roomExists, roomConfig, onAdminLogin, on
     e.preventDefault();
     setError('');
 
-    if (password !== ADMIN_PASSWORD) {
-      setError('비밀번호가 올바르지 않습니다.');
-      return;
-    }
     if (!roomName.trim()) {
       setError('방 이름을 입력해주세요.');
       return;
@@ -72,8 +79,8 @@ const WelcomeView: React.FC<Props> = ({ roomExists, roomConfig, onAdminLogin, on
         questions: questions.split('\n').filter(q => q.trim() !== '')
       });
     } catch (err) {
-      setError('방 생성에 실패했습니다.');
-    } finally {
+      console.error('Room creation error:', err);
+      setError('방 생성에 실패했습니다. 다시 시도해주세요.');
       setIsLoading(false);
     }
   };
@@ -193,66 +200,102 @@ const WelcomeView: React.FC<Props> = ({ roomExists, roomConfig, onAdminLogin, on
     );
   }
 
-  // 관리자 화면
+  // 관리자 화면 - 비밀번호 먼저 확인
+  if (!isPasswordVerified) {
+    return (
+      <div className="brutal-card w-full max-w-md p-10">
+        <button
+          onClick={() => setViewMode('select')}
+          className="mb-6 brutal-button px-4 py-2 text-sm"
+        >
+          ← 뒤로
+        </button>
+
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-black text-black uppercase tracking-tighter">관리자</h1>
+        </div>
+
+        <form onSubmit={handlePasswordCheck} className="space-y-6">
+          <div>
+            <label className="block text-sm font-black text-black mb-2 uppercase">관리자 비밀번호</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="비밀번호 입력"
+              className="w-full brutal-input font-black text-xl text-center"
+              autoFocus
+            />
+          </div>
+
+          {error && (
+            <div className="bg-rose-500 text-white p-3 border-2 border-black font-bold text-sm">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="w-full py-5 brutal-button brutal-button-primary text-xl uppercase"
+          >
+            확인
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  // 관리자 화면 - 비밀번호 확인 후 방 설정
   return (
     <div className="brutal-card w-full max-w-2xl p-10 max-h-[90vh] overflow-y-auto">
       <button
-        onClick={() => setViewMode('select')}
+        onClick={() => {
+          setViewMode('select');
+          setIsPasswordVerified(false);
+          setPassword('');
+        }}
         className="mb-6 brutal-button px-4 py-2 text-sm"
       >
         ← 뒤로
       </button>
 
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-black text-black uppercase tracking-tighter">관리자</h1>
+        <h1 className="text-3xl font-black text-black uppercase tracking-tighter">방 만들기</h1>
       </div>
 
       <form onSubmit={handleAdminSubmit} className="space-y-6">
-        <div>
-          <label className="block text-sm font-black text-black mb-2 uppercase">관리자 비밀번호</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="비밀번호 입력"
-            className="w-full brutal-input font-black"
-          />
-        </div>
-
-        <div className="border-t-4 border-black pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-black text-black mb-2 uppercase">방 이름</label>
-              <input
-                type="text"
-                value={roomName}
-                onChange={(e) => setRoomName(e.target.value)}
-                placeholder="예: 신입사원 OT"
-                className="w-full brutal-input font-black"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-black text-black mb-2 uppercase">팀 수</label>
-              <input
-                type="number"
-                value={adminTeamCount}
-                onChange={(e) => setAdminTeamCount(parseInt(e.target.value) || 4)}
-                min={2}
-                max={10}
-                className="w-full brutal-input font-black"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-black text-black mb-2 uppercase">게임 시간 (분)</label>
-              <input
-                type="number"
-                value={duration}
-                onChange={(e) => setDuration(parseInt(e.target.value) || 10)}
-                min={1}
-                max={60}
-                className="w-full brutal-input font-black"
-              />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-black text-black mb-2 uppercase">방 이름</label>
+            <input
+              type="text"
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+              placeholder="예: 신입사원 OT"
+              className="w-full brutal-input font-black"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-black text-black mb-2 uppercase">팀 수</label>
+            <input
+              type="number"
+              value={adminTeamCount}
+              onChange={(e) => setAdminTeamCount(parseInt(e.target.value) || 4)}
+              min={2}
+              max={10}
+              className="w-full brutal-input font-black"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-black text-black mb-2 uppercase">게임 시간 (분)</label>
+            <input
+              type="number"
+              value={duration}
+              onChange={(e) => setDuration(parseInt(e.target.value) || 10)}
+              min={1}
+              max={60}
+              className="w-full brutal-input font-black"
+            />
           </div>
         </div>
 
