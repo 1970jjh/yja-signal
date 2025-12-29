@@ -47,6 +47,12 @@ export interface GameState {
 
   // 라운드 카운트 (팀별)
   roundCount: Record<string, number>;
+
+  // 팀별 결과 공개 여부
+  resultRevealed: Record<string, boolean>;
+
+  // 팀별 결과 공개 시간 (10초 카운트다운용)
+  resultRevealedAt: Record<string, number | null>;
 }
 
 export interface BroadcastMessage {
