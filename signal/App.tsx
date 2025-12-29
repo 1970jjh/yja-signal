@@ -23,8 +23,9 @@ const App: React.FC = () => {
     stopGame,
     resetRoom,
     setHeroAnswer,
+    submitMemberAnswer,
+    changeQuestion,
     nextRound,
-    updateGameState,
     refreshRoomList
   } = useFirebaseRoom();
 
@@ -52,23 +53,26 @@ const App: React.FC = () => {
     await deleteRoom(roomId);
   };
 
-  // 히어로 액션
+  // 주인공 O/X 선택
   const handleHeroAction = (answer: 'O' | 'X') => {
     if (currentUser) {
       setHeroAnswer(currentUser.team, answer);
     }
   };
 
-  // 팀 동기화 (다음 라운드)
-  const handleTeamSync = (team: string, nextHeroId: string, nextQuestionIdx: number) => {
-    nextRound(team, nextHeroId, nextQuestionIdx);
+  // 팀원 답변 제출
+  const handleMemberAnswer = (odUserId: string, team: string, answer: 'O' | 'X') => {
+    submitMemberAnswer(odUserId, team, answer);
   };
 
-  // 질문 패스
-  const handlePass = (team: string, nextQuestionIdx: number) => {
-    updateGameState({
-      questionIndices: { ...gameState.questionIndices, [team]: nextQuestionIdx }
-    });
+  // 질문 변경
+  const handleChangeQuestion = (team: string, direction: 'next' | 'prev' | number) => {
+    changeQuestion(team, direction);
+  };
+
+  // 다음 라운드
+  const handleNextRound = (team: string) => {
+    nextRound(team);
   };
 
   return (
@@ -116,8 +120,9 @@ const App: React.FC = () => {
           gameState={gameState}
           participants={participants}
           onHeroAction={handleHeroAction}
-          onNextRound={handleTeamSync}
-          onPass={handlePass}
+          onMemberAnswer={handleMemberAnswer}
+          onChangeQuestion={handleChangeQuestion}
+          onNextRound={handleNextRound}
         />
       )}
     </div>

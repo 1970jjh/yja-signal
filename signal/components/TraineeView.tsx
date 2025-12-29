@@ -8,9 +8,9 @@ interface Props {
   gameState: GameState;
   participants: User[];
   onHeroAction: (answer: 'O' | 'X') => void;
-  onNextRound: (team: string, nextHeroId: string, nextQuestionIdx: number) => void;
-  onPass: (team: string, nextQuestionIdx: number) => void;
-  isReadOnly?: boolean;
+  onMemberAnswer: (odUserId: string, team: string, answer: 'O' | 'X') => void;
+  onChangeQuestion: (team: string, direction: 'next' | 'prev' | number) => void;
+  onNextRound: (team: string) => void;
 }
 
 const TraineeView: React.FC<Props> = ({
@@ -19,26 +19,36 @@ const TraineeView: React.FC<Props> = ({
   gameState,
   participants,
   onHeroAction,
-  onNextRound,
-  onPass,
-  isReadOnly = false
+  onMemberAnswer,
+  onChangeQuestion,
+  onNextRound
 }) => {
-  const [passCount, setPassCount] = useState(3);
-  const [userGuess, setUserGuess] = useState<'O' | 'X' | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [countdown, setCountdown] = useState(0);
+  const [hasAnswered, setHasAnswered] = useState(false);
+  const [showResult, setShowResult] = useState(false);
 
   // 안전하게 gameState 접근
   const currentHeroId = gameState?.currentHeroId || {};
-  const questionIndices = gameState?.questionIndices || {};
   const heroAnswerMap = gameState?.heroAnswer || {};
-  const scores = gameState?.scores || {};
-  const roundCount = gameState?.roundCount || {};
+  const questionHistory = gameState?.questionHistory || {};
+  const currentQuestionIndex = gameState?.currentQuestionIndex || {};
+  const heroHistory = gameState?.heroHistory || {};
+  const individualScores = gameState?.individualScores || {};
+  const memberAnswers = gameState?.memberAnswers || {};
 
+  const teamMembers = participants.filter(p => p.team === user.team);
   const isHero = currentHeroId[user.team] === user.id;
-  const currentQuestionIdx = questionIndices[user.team] || 0;
-  const currentQuestion = roomConfig?.questions?.[currentQuestionIdx];
   const heroAnswer = heroAnswerMap[user.team];
+  const teamHeroHistory = heroHistory[user.team] || [];
+
+  // 현재 질문 가져오기
+  const teamQuestionHistory = questionHistory[user.team] || [];
+  const questionIdx = currentQuestionIndex[user.team] || 0;
+  const actualQuestionIndex = teamQuestionHistory[questionIdx];
+  const currentQuestion = roomConfig?.questions?.[actualQuestionIndex];
+
+  // 내 답변 확인
+  const myAnswer = memberAnswers[user.team]?.[user.id];
 
   // 타이머
   useEffect(() => {
@@ -52,98 +62,89 @@ const TraineeView: React.FC<Props> = ({
     }
   }, [gameState?.isStarted, gameState?.startTime, roomConfig]);
 
-  // 히어로가 답변 후 카운트다운
-  useEffect(() => {
-    if (isHero && heroAnswer && !isReadOnly) {
-      setCountdown(5);
-      const timer = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            handleNextRound();
-            if (navigator.vibrate) navigator.vibrate(200);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [isHero, heroAnswer, isReadOnly]);
-
-  // 히어로 답변이 변경되면 유저 추측 초기화
+  // 주인공 답변이 바뀌면 초기화
   useEffect(() => {
     if (!heroAnswer) {
-      setUserGuess(null);
+      setHasAnswered(false);
+      setShowResult(false);
     }
   }, [heroAnswer]);
 
+  // 팀원 답변 후 결과 표시
+  useEffect(() => {
+    if (myAnswer && heroAnswer) {
+      setShowResult(true);
+    }
+  }, [myAnswer, heroAnswer]);
+
+  // 팀원 점수 계산 및 정렬
+  const getTeamScores = () => {
+    return teamMembers
+      .map(m => ({
+        ...m,
+        score: individualScores[m.id] || 0
+      }))
+      .sort((a, b) => b.score - a.score);
+  };
+
+  // 팀 전체 점수
+  const teamTotalScore = teamMembers.reduce((sum, m) => sum + (individualScores[m.id] || 0), 0);
+
+  // 답변 제출
+  const handleAnswer = (answer: 'O' | 'X') => {
+    if (hasAnswered) return;
+    setHasAnswered(true);
+    onMemberAnswer(user.id, user.team, answer);
+    if (navigator.vibrate) navigator.vibrate(100);
+  };
+
+  // 다음 라운드
   const handleNextRound = () => {
-    if (!roomConfig || isReadOnly) return;
-    const teamParticipants = participants.filter(p => p.team === user.team);
-    if (teamParticipants.length === 0) return;
-
-    const currentHeroIdx = teamParticipants.findIndex(p => p.id === user.id);
-    const nextHeroIdx = (currentHeroIdx + 1) % teamParticipants.length;
-    const nextHeroId = teamParticipants[nextHeroIdx].id;
-    const nextQIdx = Math.floor(Math.random() * (roomConfig.questions?.length || 1));
-
-    onNextRound(user.team, nextHeroId, nextQIdx);
-    setUserGuess(null);
-  };
-
-  const handlePass = () => {
-    if (passCount > 0 && roomConfig && !isReadOnly && !heroAnswer) {
-      setPassCount(prev => prev - 1);
-      const nextQIdx = Math.floor(Math.random() * (roomConfig.questions?.length || 1));
-      onPass(user.team, nextQIdx);
-    }
-  };
-
-  const handleGuess = (guess: 'O' | 'X') => {
-    if (isReadOnly || userGuess) return;
-    setUserGuess(guess);
-    if (guess === heroAnswer && navigator.vibrate) {
-      navigator.vibrate(100);
-    }
+    onNextRound(user.team);
   };
 
   if (!roomConfig) {
     return (
       <div className="brutal-card p-12 text-center font-black">
-        <div className="animate-pulse">SYNCING SIGNAL DATA...</div>
+        <div className="animate-pulse">데이터 동기화 중...</div>
       </div>
     );
   }
 
   // 게임 종료 화면
   if (gameState?.isFinished) {
-    const scoreEntries = Object.entries(scores);
-    const sortedTeams = scoreEntries.sort((a, b) => Number(b[1]) - Number(a[1]));
-    const teamIndex = sortedTeams.findIndex(t => t[0] === user.team);
-    const rank = (teamIndex === -1 ? 0 : teamIndex) + 1;
+    const sortedScores = getTeamScores();
+    const myRank = sortedScores.findIndex(s => s.id === user.id) + 1;
 
     return (
-      <div className="brutal-card p-12 w-full max-w-md text-center bg-yellow-300">
-        <h2 className="text-5xl font-black mb-4 uppercase italic">OVER!</h2>
-        <div className="space-y-6 mb-10">
-          <div className="brutal-inset p-8 bg-white border-4">
-            <p className="text-xl font-black uppercase">TEAM RANK</p>
-            <p className="text-8xl font-black text-indigo-600">{rank}#</p>
-          </div>
-          <div className="brutal-inset p-8 bg-white border-4">
-            <p className="text-xl font-black uppercase">SCORE</p>
-            <p className="text-6xl font-black text-emerald-600">{scores[user.team] || 0}</p>
+      <div className="brutal-card p-8 w-full max-w-md text-center bg-yellow-300">
+        <h2 className="text-4xl font-black mb-6">게임 종료!</h2>
+
+        <div className="brutal-inset p-6 bg-white border-4 mb-6">
+          <p className="text-lg font-black mb-2">나의 순위</p>
+          <p className="text-6xl font-black text-indigo-600">{myRank}등</p>
+          <p className="text-2xl font-bold mt-2">{individualScores[user.id] || 0}점</p>
+        </div>
+
+        <div className="brutal-inset p-4 bg-white border-4 mb-6">
+          <p className="text-sm font-black mb-3">우리 팀 순위</p>
+          <div className="space-y-2">
+            {sortedScores.map((member, idx) => (
+              <div
+                key={member.id}
+                className={`flex justify-between items-center p-2 ${member.id === user.id ? 'bg-indigo-100 border-2 border-indigo-500' : ''}`}
+              >
+                <span className="font-bold">{idx + 1}. {member.name}</span>
+                <span className="font-black">{member.score}점</span>
+              </div>
+            ))}
           </div>
         </div>
-        {!isReadOnly && (
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full py-5 brutal-button brutal-button-primary text-xl uppercase"
-          >
-            REBOOT SIGNAL
-          </button>
-        )}
+
+        <div className="brutal-inset p-4 bg-indigo-500 text-white border-4 border-black">
+          <p className="text-sm font-bold">팀 총점</p>
+          <p className="text-3xl font-black">{teamTotalScore}점</p>
+        </div>
       </div>
     );
   }
@@ -151,19 +152,19 @@ const TraineeView: React.FC<Props> = ({
   // 대기 화면
   if (!gameState?.isStarted) {
     return (
-      <div className="brutal-card p-16 w-full max-w-md text-center bg-indigo-500">
-        <div className="w-24 h-24 bg-white border-4 border-black flex items-center justify-center mx-auto mb-10 shadow-[8px_8px_0px_#000]">
-          <span className="text-5xl animate-pulse">📡</span>
+      <div className="brutal-card p-12 w-full max-w-md text-center bg-indigo-500">
+        <div className="w-20 h-20 bg-white border-4 border-black flex items-center justify-center mx-auto mb-8">
+          <span className="text-4xl animate-pulse">📡</span>
         </div>
-        <h2 className="text-4xl font-black text-white mb-4 uppercase">READY?</h2>
-        <p className="text-white/90 font-bold mb-10 italic">Waiting for Command Center to start signal...</p>
-        <div className="bg-black text-white p-6 border-2 border-white">
-          <p className="text-xs font-black uppercase tracking-widest opacity-70 mb-2">My Profile</p>
-          <p className="text-2xl font-black">{user.team} // {user.name}</p>
+        <h2 className="text-3xl font-black text-white mb-4">대기 중</h2>
+        <p className="text-white/90 font-bold mb-8">관리자가 게임을 시작하면 시작됩니다</p>
+        <div className="bg-black text-white p-4 border-2 border-white">
+          <p className="text-xs font-bold opacity-70 mb-1">내 정보</p>
+          <p className="text-xl font-black">{user.team} / {user.name}</p>
         </div>
-        <div className="mt-6 bg-white/20 p-4 rounded">
+        <div className="mt-4 bg-white/20 p-3">
           <p className="text-white/80 text-sm">
-            팀원 {participants.filter(p => p.team === user.team).length}명 대기 중
+            팀원 {teamMembers.length}명 대기 중
           </p>
         </div>
       </div>
@@ -174,124 +175,214 @@ const TraineeView: React.FC<Props> = ({
   const seconds = Number(timeLeft) % 60;
 
   return (
-    <div className={`w-full max-w-xl space-y-8 ${isReadOnly ? 'scale-90 pointer-events-none' : ''}`}>
-      {/* 헤더 정보 */}
-      <div className="flex justify-between items-stretch gap-6">
-        <div className="brutal-card px-8 py-4 flex-1 bg-white">
-          <p className="text-xs font-black uppercase italic mb-1">Time Left</p>
-          <p className={`text-4xl font-black ${timeLeft < 30 ? 'text-rose-500 animate-pulse' : 'text-black'}`}>
+    <div className="w-full max-w-xl space-y-4">
+      {/* 상단 정보 */}
+      <div className="flex justify-between items-center gap-4">
+        <div className="brutal-card px-4 py-2 bg-white">
+          <p className="text-xs font-bold text-gray-500">남은 시간</p>
+          <p className={`text-2xl font-black ${timeLeft < 30 ? 'text-rose-500 animate-pulse' : ''}`}>
             {minutes}:{seconds.toString().padStart(2, '0')}
           </p>
         </div>
-        <div className="brutal-card px-8 py-4 bg-indigo-500 text-white">
-          <p className="text-xs font-black uppercase italic mb-1">Points</p>
-          <p className="text-4xl font-black">{scores[user.team] || 0}</p>
+        <div className="brutal-card px-4 py-2 bg-indigo-500 text-white">
+          <p className="text-xs font-bold opacity-80">팀 점수</p>
+          <p className="text-2xl font-black">{teamTotalScore}점</p>
         </div>
       </div>
 
-      {/* 메인 게임 인터페이스 */}
-      <div className="brutal-card p-10 min-h-[500px] flex flex-col items-center justify-between relative bg-white">
-        {/* 카운트다운 오버레이 */}
-        {countdown > 0 && (
-          <div className="absolute inset-0 bg-yellow-400 z-20 flex flex-col items-center justify-center border-4 border-black p-4">
-            <p className="text-3xl font-black text-black uppercase mb-6 italic">Next Signal Starting...</p>
-            <div className="w-24 h-24 bg-black text-white flex items-center justify-center text-6xl font-black shadow-[8px_8px_0px_#fff]">
-              {countdown}
-            </div>
-          </div>
-        )}
-
-        <div className="w-full text-center">
-          <div className={`inline-block border-2 border-black px-4 py-1 text-xs font-black mb-6 uppercase tracking-widest ${isHero ? 'bg-indigo-500 text-white' : 'bg-yellow-300 text-black'}`}>
-            {isHero ? 'You are the Hero' : `HERO: ${participants.find(p => p.id === currentHeroId[user.team])?.name || '...'}`}
-          </div>
-
-          <div className="brutal-inset p-10 bg-slate-50 border-4 min-h-[220px] flex items-center justify-center mb-10 relative">
-            <h2 className="text-3xl font-black text-black leading-tight uppercase">
-              "{currentQuestion || "LOADING SIGNAL..."}"
-            </h2>
-            <div className="absolute -top-4 -right-4 bg-black text-white px-3 py-1 text-xs font-black">?</div>
-          </div>
+      {/* 팀원 목록 - 주인공 표시 */}
+      <div className="brutal-card p-4 bg-white">
+        <p className="text-xs font-bold text-gray-500 mb-2">우리 팀 (★ 주인공 완료)</p>
+        <div className="flex flex-wrap gap-2">
+          {teamMembers.map(member => {
+            const isCurrentHero = currentHeroId[user.team] === member.id;
+            const wasHero = teamHeroHistory.includes(member.id);
+            return (
+              <div
+                key={member.id}
+                className={`px-3 py-2 border-2 border-black font-bold text-sm flex items-center gap-1 ${
+                  isCurrentHero ? 'bg-yellow-300' : wasHero ? 'bg-indigo-100' : 'bg-white'
+                }`}
+              >
+                {isCurrentHero ? '⭐' : wasHero ? '★' : '☆'}
+                <span>{member.name}</span>
+                <span className="text-xs text-gray-500">({individualScores[member.id] || 0})</span>
+              </div>
+            );
+          })}
         </div>
+      </div>
 
-        <div className="w-full space-y-8">
-          {isHero ? (
-            <>
-              {!heroAnswer ? (
-                <div className="grid grid-cols-2 gap-6">
-                  <button
-                    onClick={() => onHeroAction('O')}
-                    className="py-12 brutal-button brutal-button-success text-7xl font-black"
-                  >
-                    O
-                  </button>
-                  <button
-                    onClick={() => onHeroAction('X')}
-                    className="py-12 brutal-button brutal-button-danger text-7xl font-black"
-                  >
-                    X
-                  </button>
-                </div>
-              ) : (
-                <div className="bg-black text-white p-8 border-4 border-black text-center shadow-[8px_8px_0px_#4f46e5]">
-                  <p className="text-2xl font-black uppercase mb-1">Choice Locked: {heroAnswer}</p>
-                  <p className="text-xs font-bold opacity-60 italic">Wait for your team to decode your heart signal!</p>
-                </div>
-              )}
+      {/* 메인 게임 카드 */}
+      <div className="brutal-card p-6 bg-white min-h-[400px] flex flex-col">
+        {/* 주인공 화면 */}
+        {isHero ? (
+          <>
+            {/* 주인공 알림 */}
+            <div className="text-center mb-6">
+              <div className="inline-block bg-yellow-300 border-4 border-black px-6 py-3 -rotate-1">
+                <p className="text-2xl font-black">⭐ 당신이 주인공입니다! ⭐</p>
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                당신에 대한 설명이 맞다면 O, 아니라면 X를 선택하세요
+              </p>
+            </div>
 
-              <div className="flex justify-center">
+            {/* 질문 */}
+            <div className="brutal-inset p-6 bg-slate-50 border-4 flex-1 flex items-center justify-center mb-4">
+              <h2 className="text-xl font-black text-center leading-relaxed">
+                {currentQuestion || "질문 로딩 중..."}
+              </h2>
+            </div>
+
+            {/* 질문 선택 (4개 중 선택) */}
+            {!heroAnswer && (
+              <div className="mb-4">
+                <p className="text-xs font-bold text-gray-500 mb-2">다른 질문 선택 ({questionIdx + 1}/4)</p>
+                <div className="flex gap-2">
+                  {teamQuestionHistory.map((qIdx, i) => (
+                    <button
+                      key={i}
+                      onClick={() => onChangeQuestion(user.team, i)}
+                      className={`flex-1 py-2 brutal-button text-sm font-bold ${
+                        i === questionIdx ? 'bg-indigo-500 text-white' : 'bg-white'
+                      }`}
+                    >
+                      {i + 1}번
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* O/X 선택 */}
+            {!heroAnswer ? (
+              <div className="grid grid-cols-2 gap-4">
                 <button
-                  disabled={passCount === 0 || !!heroAnswer}
-                  onClick={handlePass}
-                  className={`px-8 py-3 brutal-button text-sm flex items-center gap-4 ${passCount > 0 && !heroAnswer ? 'bg-yellow-300' : 'bg-slate-300 opacity-50 cursor-not-allowed'}`}
+                  onClick={() => onHeroAction('O')}
+                  className="py-10 brutal-button brutal-button-success text-6xl font-black"
                 >
-                  <span className="bg-black text-white px-2 py-0.5">SKIP</span>
-                  <span className="font-black">REMAINING: {passCount}</span>
+                  O
+                </button>
+                <button
+                  onClick={() => onHeroAction('X')}
+                  className="py-10 brutal-button brutal-button-danger text-6xl font-black"
+                >
+                  X
                 </button>
               </div>
-            </>
-          ) : (
-            <>
-              {heroAnswer ? (
-                <div className="space-y-6">
-                  <p className="text-center font-black uppercase text-indigo-600 tracking-tighter text-xl">What is Hero's Choice?</p>
-                  <div className="grid grid-cols-2 gap-6">
-                    <button
-                      onClick={() => handleGuess('O')}
-                      disabled={!!userGuess}
-                      className={`py-12 brutal-button text-7xl font-black transition-all ${
-                        userGuess === 'O'
-                          ? (userGuess === heroAnswer ? 'bg-emerald-400' : 'bg-slate-300')
-                          : 'bg-white text-black'
-                      }`}
-                    >
-                      O
-                    </button>
-                    <button
-                      onClick={() => handleGuess('X')}
-                      disabled={!!userGuess}
-                      className={`py-12 brutal-button text-7xl font-black transition-all ${
-                        userGuess === 'X'
-                          ? (userGuess === heroAnswer ? 'bg-emerald-400' : 'bg-slate-300')
-                          : 'bg-white text-black'
-                      }`}
-                    >
-                      X
-                    </button>
-                  </div>
-                  {userGuess && (
-                    <div className={`p-4 border-4 border-black text-center font-black uppercase text-xl ${userGuess === heroAnswer ? 'bg-emerald-400' : 'bg-rose-400'}`}>
-                      {userGuess === heroAnswer ? '✓ SIGNAL MATCH (+100)' : '✗ SIGNAL MISMATCH'}
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-black text-white p-6 border-4 border-black text-center">
+                  <p className="text-xl font-black">선택 완료: {heroAnswer}</p>
+                  <p className="text-sm opacity-70 mt-1">팀원들이 맞추는 중...</p>
+                </div>
+                <button
+                  onClick={handleNextRound}
+                  className="w-full py-4 brutal-button brutal-button-primary font-black text-lg"
+                >
+                  다음 주인공으로 →
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          /* 팀원 화면 */
+          <>
+            {/* 주인공 알림 */}
+            <div className="text-center mb-4">
+              <div className="inline-block bg-indigo-100 border-2 border-black px-4 py-2">
+                <p className="font-black">
+                  현재 주인공: {teamMembers.find(m => m.id === currentHeroId[user.team])?.name || '...'}
+                </p>
+              </div>
+            </div>
+
+            {/* 주인공 답변 대기 */}
+            {!heroAnswer ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center brutal-inset p-8 bg-slate-100">
+                  <p className="text-xl font-black animate-pulse">주인공이 선택 중...</p>
+                  <p className="text-sm text-gray-500 mt-2">잠시만 기다려주세요</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* 질문 표시 */}
+                <div className="brutal-inset p-6 bg-slate-50 border-4 flex-1 flex items-center justify-center mb-4">
+                  <h2 className="text-xl font-black text-center leading-relaxed">
+                    {currentQuestion || "질문 로딩 중..."}
+                  </h2>
+                </div>
+
+                {/* 추측하기 */}
+                {!showResult ? (
+                  <div className="space-y-3">
+                    <p className="text-center font-bold text-indigo-600">
+                      주인공이 뭘 골랐을까요?
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        onClick={() => handleAnswer('O')}
+                        disabled={hasAnswered}
+                        className={`py-10 brutal-button text-6xl font-black ${
+                          hasAnswered ? 'bg-slate-200' : 'bg-emerald-100 hover:bg-emerald-200'
+                        }`}
+                      >
+                        O
+                      </button>
+                      <button
+                        onClick={() => handleAnswer('X')}
+                        disabled={hasAnswered}
+                        className={`py-10 brutal-button text-6xl font-black ${
+                          hasAnswered ? 'bg-slate-200' : 'bg-rose-100 hover:bg-rose-200'
+                        }`}
+                      >
+                        X
+                      </button>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-16 brutal-inset bg-black text-white">
-                  <p className="font-black text-xl uppercase italic tracking-widest animate-pulse">Waiting for Hero Signal...</p>
-                </div>
-              )}
-            </>
-          )}
+                  </div>
+                ) : (
+                  /* 결과 표시 */
+                  <div className="space-y-4">
+                    <div className={`p-6 border-4 border-black text-center ${
+                      myAnswer === heroAnswer ? 'bg-emerald-400' : 'bg-rose-400'
+                    }`}>
+                      <p className="text-2xl font-black">
+                        {myAnswer === heroAnswer ? '✓ 정답! +100점' : '✗ 오답'}
+                      </p>
+                      <p className="text-sm mt-1">
+                        주인공 선택: {heroAnswer} / 내 선택: {myAnswer}
+                      </p>
+                    </div>
+                    <div className="text-center text-sm text-gray-500">
+                      주인공이 다음으로 넘기면 계속됩니다
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* 개인 순위 */}
+      <div className="brutal-card p-4 bg-white">
+        <p className="text-xs font-bold text-gray-500 mb-2">실시간 순위</p>
+        <div className="space-y-1">
+          {getTeamScores().map((member, idx) => (
+            <div
+              key={member.id}
+              className={`flex justify-between items-center px-3 py-2 ${
+                member.id === user.id ? 'bg-yellow-100 border-2 border-yellow-400' : 'bg-slate-50'
+              }`}
+            >
+              <span className="font-bold">
+                {idx + 1}등 {member.name} {member.id === user.id && '(나)'}
+              </span>
+              <span className="font-black text-indigo-600">{member.score}점</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
