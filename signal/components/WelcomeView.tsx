@@ -13,7 +13,7 @@ interface Props {
   onRefreshRooms: () => void;
 }
 
-type ViewMode = 'select' | 'admin' | 'admin-create' | 'participant' | 'participant-join';
+type ViewMode = 'select' | 'admin' | 'admin-create' | 'participant-join';
 
 const WelcomeView: React.FC<Props> = ({
   roomList,
@@ -52,6 +52,12 @@ const WelcomeView: React.FC<Props> = ({
     } else {
       setError('비밀번호가 올바르지 않습니다.');
     }
+  };
+
+  const handleRoomSelect = (room: RoomInfo) => {
+    setSelectedRoom(room);
+    setSelectedTeam('Team 1');
+    setViewMode('participant-join');
   };
 
   const handleParticipantSubmit = async (e: React.FormEvent) => {
@@ -115,94 +121,70 @@ const WelcomeView: React.FC<Props> = ({
     return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
   };
 
-  // 역할 선택 화면
+  // 메인 화면 - 방 목록 + 관리자 버튼
   if (viewMode === 'select') {
     return (
-      <div className="brutal-card w-full max-w-md p-10">
-        <div className="text-center mb-10">
+      <div className="brutal-card w-full max-w-md p-8">
+        <div className="text-center mb-6">
           <h1 className="text-4xl font-black text-black mb-1 uppercase tracking-tighter">이심전심 시그널</h1>
           <div className="bg-yellow-300 border-2 border-black inline-block px-3 py-1 -rotate-1">
             <p className="text-black font-black text-xs">주인공의 마음을 읽어라!</p>
           </div>
         </div>
 
-        {/* 방 상태 표시 */}
-        <div className={`mb-8 p-4 border-4 border-black text-center ${roomList.length > 0 ? 'bg-emerald-100' : 'bg-slate-100'}`}>
-          {roomList.length > 0 ? (
-            <>
-              <p className="font-black text-emerald-600">● 게임 준비됨</p>
-              <p className="text-sm font-bold mt-1">{roomList.length}개의 방이 열려 있습니다</p>
-            </>
+        {/* 방 목록 - 바로 클릭해서 참가 */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="font-black text-sm uppercase">참가할 방 선택</h2>
+            <button
+              onClick={onRefreshRooms}
+              className="text-xs brutal-button px-2 py-1"
+            >
+              새로고침
+            </button>
+          </div>
+
+          {roomList.length === 0 ? (
+            <div className="p-6 border-4 border-black bg-slate-100 text-center">
+              <p className="text-slate-500 font-bold text-sm">아직 열린 방이 없습니다</p>
+              <p className="text-slate-400 text-xs mt-1">관리자가 방을 만들어야 합니다</p>
+            </div>
           ) : (
-            <p className="font-black text-slate-500">○ 대기 중 (관리자가 방을 만들어야 합니다)</p>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {roomList.map((room) => (
+                <button
+                  key={room.id}
+                  onClick={() => handleRoomSelect(room)}
+                  className="w-full p-4 brutal-button text-left hover:bg-indigo-100 transition-colors brutal-button-primary"
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-black text-lg">{room.roomName}</p>
+                      <p className="text-xs opacity-80">
+                        {room.teamCount}팀 · {room.participantCount}명 참가 중
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {room.isStarted ? (
+                        <span className="bg-emerald-500 text-white px-2 py-1 text-xs font-bold border-2 border-black">진행 중</span>
+                      ) : (
+                        <span className="bg-yellow-300 text-black px-2 py-1 text-xs font-bold border-2 border-black">대기 중</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
-        <div className="space-y-4">
-          <button
-            onClick={() => setViewMode('participant')}
-            disabled={roomList.length === 0}
-            className={`w-full py-6 brutal-button text-xl uppercase ${
-              roomList.length > 0 ? 'brutal-button-primary' : 'bg-slate-300 cursor-not-allowed'
-            }`}
-          >
-            참가하기
-          </button>
-          <button
-            onClick={() => setViewMode('admin')}
-            className="w-full py-4 brutal-button brutal-button-secondary text-lg uppercase"
-          >
-            관리자
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 참가자 - 방 선택 화면
-  if (viewMode === 'participant') {
-    return (
-      <div className="brutal-card w-full max-w-md p-10">
+        {/* 관리자 버튼 */}
         <button
-          onClick={() => setViewMode('select')}
-          className="mb-6 brutal-button px-4 py-2 text-sm"
+          onClick={() => setViewMode('admin')}
+          className="w-full py-3 brutal-button brutal-button-secondary text-sm uppercase"
         >
-          ← 뒤로
+          관리자
         </button>
-
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-black uppercase tracking-tighter">방 선택</h1>
-          <p className="text-sm text-slate-600 mt-2">참가할 방을 선택하세요</p>
-        </div>
-
-        <div className="space-y-3 max-h-80 overflow-y-auto">
-          {roomList.map((room) => (
-            <button
-              key={room.id}
-              onClick={() => {
-                setSelectedRoom(room);
-                setViewMode('participant-join');
-              }}
-              className="w-full p-4 brutal-button text-left hover:bg-indigo-100 transition-colors"
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-black text-lg">{room.roomName}</p>
-                  <p className="text-xs text-slate-600">
-                    {room.teamCount}팀 · {room.participantCount}명 참가 중
-                  </p>
-                </div>
-                <div className="text-right">
-                  {room.isStarted ? (
-                    <span className="bg-emerald-400 text-white px-2 py-1 text-xs font-bold border-2 border-black">진행 중</span>
-                  ) : (
-                    <span className="bg-yellow-300 px-2 py-1 text-xs font-bold border-2 border-black">대기 중</span>
-                  )}
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
       </div>
     );
   }
@@ -212,7 +194,7 @@ const WelcomeView: React.FC<Props> = ({
     return (
       <div className="brutal-card w-full max-w-md p-10">
         <button
-          onClick={() => setViewMode('participant')}
+          onClick={() => setViewMode('select')}
           className="mb-6 brutal-button px-4 py-2 text-sm"
         >
           ← 뒤로
