@@ -58,7 +58,23 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
         setIsConnected(true);
         setRoomExists(true);
         if (data.config) setRoomConfig(data.config);
-        if (data.gameState) setGameState(data.gameState);
+
+        // gameState를 기본값과 병합하여 안전하게 설정
+        if (data.gameState) {
+          setGameState({
+            isStarted: data.gameState.isStarted ?? false,
+            isFinished: data.gameState.isFinished ?? false,
+            startTime: data.gameState.startTime ?? null,
+            currentHeroId: data.gameState.currentHeroId ?? {},
+            heroAnswer: data.gameState.heroAnswer ?? {},
+            scores: data.gameState.scores ?? {},
+            roundCount: data.gameState.roundCount ?? {},
+            questionIndices: data.gameState.questionIndices ?? {}
+          });
+        } else {
+          setGameState(initialGameState);
+        }
+
         if (data.participants) {
           const participantsList = Object.values(data.participants) as User[];
           setParticipants(participantsList);
@@ -88,18 +104,23 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     const initialHeroes: Record<string, string> = {};
     const initialRounds: Record<string, number> = {};
     const initialIndices: Record<string, number> = {};
+    const initialHeroAnswers: Record<string, null> = {};
 
     for (let i = 1; i <= config.teamCount; i++) {
       const teamName = `Team ${i}`;
       initialScores[teamName] = 0;
       initialRounds[teamName] = 0;
       initialIndices[teamName] = 0;
+      initialHeroAnswers[teamName] = null;
     }
 
     const newGameState: GameState = {
-      ...initialGameState,
+      isStarted: false,
+      isFinished: false,
+      startTime: null,
       scores: initialScores,
       currentHeroId: initialHeroes,
+      heroAnswer: initialHeroAnswers,
       roundCount: initialRounds,
       questionIndices: initialIndices
     };
@@ -153,7 +174,7 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
       // 팀의 첫 번째 멤버면 히어로로 설정
       const roomData = snapshot.val();
       const existingParticipants = roomData.participants ? Object.values(roomData.participants) as User[] : [];
-      const teamMembers = existingParticipants.filter(p => p.team === newUser.team);
+      const teamMembers = existingParticipants.filter((p: User) => p.team === newUser.team);
 
       if (teamMembers.length === 0 && userData.role === UserRole.TRAINEE) {
         const heroRef = ref(database, `rooms/${FIXED_ROOM_ID}/gameState/currentHeroId/${newUser.team}`);
@@ -220,12 +241,15 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
 
   // 다음 라운드로 이동
   const nextRound = useCallback((team: string, nextHeroId: string, nextQuestionIdx: number) => {
+    const currentScores = gameState.scores || {};
+    const currentRoundCount = gameState.roundCount || {};
+
     const updates: Record<string, any> = {};
-    updates[`gameState/scores/${team}`] = (gameState.scores[team] || 0) + 100;
+    updates[`gameState/scores/${team}`] = (currentScores[team] || 0) + 100;
     updates[`gameState/currentHeroId/${team}`] = nextHeroId;
     updates[`gameState/heroAnswer/${team}`] = null;
     updates[`gameState/questionIndices/${team}`] = nextQuestionIdx;
-    updates[`gameState/roundCount/${team}`] = (gameState.roundCount[team] || 0) + 1;
+    updates[`gameState/roundCount/${team}`] = (currentRoundCount[team] || 0) + 1;
 
     const roomRef = ref(database, `rooms/${FIXED_ROOM_ID}`);
     update(roomRef, updates);

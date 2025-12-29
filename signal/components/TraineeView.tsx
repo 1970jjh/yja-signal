@@ -28,14 +28,21 @@ const TraineeView: React.FC<Props> = ({
   const [timeLeft, setTimeLeft] = useState(0);
   const [countdown, setCountdown] = useState(0);
 
-  const isHero = gameState.currentHeroId[user.team] === user.id;
-  const currentQuestionIdx = gameState.questionIndices[user.team] || 0;
-  const currentQuestion = roomConfig?.questions[currentQuestionIdx];
-  const heroAnswer = gameState.heroAnswer[user.team];
+  // 안전하게 gameState 접근
+  const currentHeroId = gameState?.currentHeroId || {};
+  const questionIndices = gameState?.questionIndices || {};
+  const heroAnswerMap = gameState?.heroAnswer || {};
+  const scores = gameState?.scores || {};
+  const roundCount = gameState?.roundCount || {};
+
+  const isHero = currentHeroId[user.team] === user.id;
+  const currentQuestionIdx = questionIndices[user.team] || 0;
+  const currentQuestion = roomConfig?.questions?.[currentQuestionIdx];
+  const heroAnswer = heroAnswerMap[user.team];
 
   // 타이머
   useEffect(() => {
-    if (gameState.isStarted && roomConfig) {
+    if (gameState?.isStarted && roomConfig) {
       const interval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - (Number(gameState.startTime) || Date.now())) / 1000);
         const total = Number(roomConfig.durationMinutes) * 60;
@@ -43,7 +50,7 @@ const TraineeView: React.FC<Props> = ({
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [gameState.isStarted, gameState.startTime, roomConfig]);
+  }, [gameState?.isStarted, gameState?.startTime, roomConfig]);
 
   // 히어로가 답변 후 카운트다운
   useEffect(() => {
@@ -79,7 +86,7 @@ const TraineeView: React.FC<Props> = ({
     const currentHeroIdx = teamParticipants.findIndex(p => p.id === user.id);
     const nextHeroIdx = (currentHeroIdx + 1) % teamParticipants.length;
     const nextHeroId = teamParticipants[nextHeroIdx].id;
-    const nextQIdx = Math.floor(Math.random() * roomConfig.questions.length);
+    const nextQIdx = Math.floor(Math.random() * (roomConfig.questions?.length || 1));
 
     onNextRound(user.team, nextHeroId, nextQIdx);
     setUserGuess(null);
@@ -88,7 +95,7 @@ const TraineeView: React.FC<Props> = ({
   const handlePass = () => {
     if (passCount > 0 && roomConfig && !isReadOnly && !heroAnswer) {
       setPassCount(prev => prev - 1);
-      const nextQIdx = Math.floor(Math.random() * roomConfig.questions.length);
+      const nextQIdx = Math.floor(Math.random() * (roomConfig.questions?.length || 1));
       onPass(user.team, nextQIdx);
     }
   };
@@ -110,8 +117,9 @@ const TraineeView: React.FC<Props> = ({
   }
 
   // 게임 종료 화면
-  if (gameState.isFinished) {
-    const sortedTeams = Object.entries(gameState.scores).sort((a, b) => Number(b[1]) - Number(a[1]));
+  if (gameState?.isFinished) {
+    const scoreEntries = Object.entries(scores);
+    const sortedTeams = scoreEntries.sort((a, b) => Number(b[1]) - Number(a[1]));
     const teamIndex = sortedTeams.findIndex(t => t[0] === user.team);
     const rank = (teamIndex === -1 ? 0 : teamIndex) + 1;
 
@@ -125,7 +133,7 @@ const TraineeView: React.FC<Props> = ({
           </div>
           <div className="brutal-inset p-8 bg-white border-4">
             <p className="text-xl font-black uppercase">SCORE</p>
-            <p className="text-6xl font-black text-emerald-600">{gameState.scores[user.team]}</p>
+            <p className="text-6xl font-black text-emerald-600">{scores[user.team] || 0}</p>
           </div>
         </div>
         {!isReadOnly && (
@@ -141,7 +149,7 @@ const TraineeView: React.FC<Props> = ({
   }
 
   // 대기 화면
-  if (!gameState.isStarted) {
+  if (!gameState?.isStarted) {
     return (
       <div className="brutal-card p-16 w-full max-w-md text-center bg-indigo-500">
         <div className="w-24 h-24 bg-white border-4 border-black flex items-center justify-center mx-auto mb-10 shadow-[8px_8px_0px_#000]">
@@ -177,7 +185,7 @@ const TraineeView: React.FC<Props> = ({
         </div>
         <div className="brutal-card px-8 py-4 bg-indigo-500 text-white">
           <p className="text-xs font-black uppercase italic mb-1">Points</p>
-          <p className="text-4xl font-black">{gameState.scores[user.team] || 0}</p>
+          <p className="text-4xl font-black">{scores[user.team] || 0}</p>
         </div>
       </div>
 
@@ -195,7 +203,7 @@ const TraineeView: React.FC<Props> = ({
 
         <div className="w-full text-center">
           <div className={`inline-block border-2 border-black px-4 py-1 text-xs font-black mb-6 uppercase tracking-widest ${isHero ? 'bg-indigo-500 text-white' : 'bg-yellow-300 text-black'}`}>
-            {isHero ? 'You are the Hero' : `HERO: ${participants.find(p => p.id === gameState.currentHeroId[user.team])?.name || '...'}`}
+            {isHero ? 'You are the Hero' : `HERO: ${participants.find(p => p.id === currentHeroId[user.team])?.name || '...'}`}
           </div>
 
           <div className="brutal-inset p-10 bg-slate-50 border-4 min-h-[220px] flex items-center justify-center mb-10 relative">
