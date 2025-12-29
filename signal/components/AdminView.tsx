@@ -4,26 +4,23 @@ import { RoomConfig, GameState, User, UserRole } from '../types';
 import TraineeView from './TraineeView';
 
 interface Props {
-  roomCode: string | null;
   roomConfig: RoomConfig | null;
   gameState: GameState;
   participants: User[];
   onStart: () => void;
   onStop: () => void;
-  onLeave: () => void;
+  onReset: () => void;
 }
 
 const AdminView: React.FC<Props> = ({
-  roomCode,
   roomConfig,
   gameState,
   participants,
   onStart,
   onStop,
-  onLeave
+  onReset
 }) => {
   const [inspectingTeam, setInspectingTeam] = useState<string | null>(null);
-  const [showQR, setShowQR] = useState(false);
 
   const closeInspector = () => setInspectingTeam(null);
 
@@ -38,7 +35,7 @@ const AdminView: React.FC<Props> = ({
     return { id: 'mock', name: 'ADMIN-VIEW', team: teamName, role: UserRole.TRAINEE, score: 0 } as User;
   };
 
-  if (!roomConfig || !roomCode) {
+  if (!roomConfig) {
     return (
       <div className="brutal-card p-12 text-center font-black">
         <div className="animate-pulse">CREATING ROOM...</div>
@@ -48,24 +45,6 @@ const AdminView: React.FC<Props> = ({
 
   return (
     <div className="w-full max-w-6xl space-y-10">
-      {/* 방 코드 표시 */}
-      <div className="brutal-card p-8 bg-indigo-500 text-white text-center">
-        <p className="text-sm font-black uppercase tracking-widest mb-2">ROOM CODE</p>
-        <div className="flex items-center justify-center gap-4">
-          <p className="text-6xl font-black tracking-[0.3em]">{roomCode}</p>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(roomCode);
-              alert('방 코드가 복사되었습니다!');
-            }}
-            className="brutal-button bg-white text-black px-4 py-2"
-          >
-            복사
-          </button>
-        </div>
-        <p className="mt-4 text-white/80 text-sm">참가자들에게 이 코드를 알려주세요!</p>
-      </div>
-
       {/* Header Dashboard Info */}
       <div className="flex flex-col md:flex-row justify-between items-stretch gap-6">
         <div className="brutal-card px-10 py-6 flex-1 bg-yellow-300">
@@ -74,11 +53,11 @@ const AdminView: React.FC<Props> = ({
             <span className={`brutal-badge ${gameState.isStarted ? 'bg-emerald-400' : 'bg-black text-white'}`}>
               {gameState.isStarted ? '● LIVE' : gameState.isFinished ? '■ ENDED' : '○ READY'}
             </span>
-            <p className="text-lg font-black">Connected: {traineeParticipants.length} users</p>
+            <p className="text-lg font-black">접속: {traineeParticipants.length}명</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="flex gap-4">
           {!gameState.isStarted && !gameState.isFinished ? (
             <button
               onClick={onStart}
@@ -87,21 +66,25 @@ const AdminView: React.FC<Props> = ({
                 traineeParticipants.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'brutal-button-success'
               }`}
             >
-              Start Signal
+              게임 시작
             </button>
           ) : (
             <button
               onClick={onStop}
               className="px-10 py-4 brutal-button brutal-button-danger uppercase"
             >
-              Terminate
+              종료
             </button>
           )}
           <button
-            onClick={onLeave}
-            className="px-10 py-4 brutal-button brutal-button-secondary uppercase"
+            onClick={() => {
+              if (confirm('방을 초기화하시겠습니까? 모든 참가자가 나가게 됩니다.')) {
+                onReset();
+              }
+            }}
+            className="px-6 py-4 brutal-button brutal-button-secondary uppercase"
           >
-            Leave Room
+            초기화
           </button>
         </div>
       </div>
@@ -109,12 +92,12 @@ const AdminView: React.FC<Props> = ({
       {/* 참가자 목록 */}
       <div className="brutal-card p-8">
         <h3 className="text-2xl font-black mb-6 border-b-4 border-black pb-2 uppercase">
-          Participants ({traineeParticipants.length})
+          참가자 ({traineeParticipants.length}명)
         </h3>
         {traineeParticipants.length === 0 ? (
           <div className="text-center py-10 text-slate-500">
             <p className="text-xl font-bold">아직 참가자가 없습니다.</p>
-            <p className="mt-2">방 코드를 공유해주세요!</p>
+            <p className="mt-2">참가자들이 접속하면 여기에 표시됩니다.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -154,16 +137,16 @@ const AdminView: React.FC<Props> = ({
 
       {/* Real-time Status Table */}
       <div className="brutal-card p-10">
-        <h3 className="text-2xl font-black mb-8 border-b-4 border-black pb-2 uppercase italic">Real-time Stream Status</h3>
+        <h3 className="text-2xl font-black mb-8 border-b-4 border-black pb-2 uppercase italic">실시간 현황</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="bg-black text-white border-b-4 border-black">
-                <th className="px-6 py-4 font-black uppercase text-sm">Team Unit</th>
-                <th className="px-6 py-4 font-black uppercase text-sm">Members</th>
-                <th className="px-6 py-4 font-black uppercase text-sm">Active Hero</th>
-                <th className="px-6 py-4 font-black uppercase text-sm">Choice State</th>
-                <th className="px-6 py-4 font-black uppercase text-sm">Current Points</th>
+                <th className="px-6 py-4 font-black uppercase text-sm">팀</th>
+                <th className="px-6 py-4 font-black uppercase text-sm">인원</th>
+                <th className="px-6 py-4 font-black uppercase text-sm">현재 주인공</th>
+                <th className="px-6 py-4 font-black uppercase text-sm">선택</th>
+                <th className="px-6 py-4 font-black uppercase text-sm">점수</th>
               </tr>
             </thead>
             <tbody className="divide-y-4 divide-black">
@@ -184,10 +167,10 @@ const AdminView: React.FC<Props> = ({
                     <td className="px-6 py-6">
                       {answer ? (
                         <div className={`brutal-badge inline-block ${answer === 'O' ? 'bg-emerald-400' : 'bg-rose-400'}`}>
-                          {answer} SELECTED
+                          {answer}
                         </div>
                       ) : (
-                        <span className="text-slate-400 font-bold animate-pulse">THINKING...</span>
+                        <span className="text-slate-400 font-bold animate-pulse">생각중...</span>
                       )}
                     </td>
                     <td className="px-6 py-6 font-black text-3xl">{score}</td>
@@ -204,7 +187,7 @@ const AdminView: React.FC<Props> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/80 backdrop-blur-md">
           <div className="brutal-card w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-slate-100 flex flex-col p-4">
             <div className="flex justify-between items-center mb-6 px-4 bg-indigo-500 border-4 border-black p-4 text-white">
-              <h2 className="text-2xl font-black uppercase tracking-tighter">Monitoring: {inspectingTeam}</h2>
+              <h2 className="text-2xl font-black uppercase tracking-tighter">{inspectingTeam} 모니터링</h2>
               <button
                 onClick={closeInspector}
                 className="w-12 h-12 flex items-center justify-center brutal-button brutal-button-secondary text-black"
@@ -225,7 +208,7 @@ const AdminView: React.FC<Props> = ({
               />
             </div>
             <div className="mt-6 bg-black text-white p-2 text-center text-[10px] font-black uppercase tracking-[0.3em]">
-              Admin Restricted Access Mode
+              관리자 모니터링 모드
             </div>
           </div>
         </div>

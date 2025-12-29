@@ -8,18 +8,18 @@ import WelcomeView from './components/WelcomeView';
 
 const App: React.FC = () => {
   const {
-    roomCode,
     roomConfig,
     gameState,
     participants,
     currentUser,
     isConnected,
     error,
+    roomExists,
     createRoom,
     joinRoom,
-    leaveRoom,
     startGame,
     stopGame,
+    resetRoom,
     setHeroAnswer,
     nextRound,
     updateGameState
@@ -34,9 +34,9 @@ const App: React.FC = () => {
     }
   };
 
-  // 참가자 로그인 및 방 참가
-  const handleParticipantLogin = async (name: string, team: string, code: string) => {
-    await joinRoom(code, { name, team, role: UserRole.TRAINEE });
+  // 참가자 로그인
+  const handleParticipantLogin = async (name: string, team: string) => {
+    await joinRoom({ name, team, role: UserRole.TRAINEE });
   };
 
   // 히어로 액션
@@ -61,7 +61,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen p-4 md:p-8 flex items-center justify-center">
       {/* 연결 상태 표시 */}
-      {roomCode && (
+      {currentUser && (
         <div className="fixed top-4 right-4 z-50">
           <div className={`brutal-badge ${isConnected ? 'bg-emerald-400' : 'bg-rose-400'} px-4 py-2`}>
             {isConnected ? '● 연결됨' : '○ 연결 중...'}
@@ -80,18 +80,19 @@ const App: React.FC = () => {
 
       {!currentUser ? (
         <WelcomeView
+          roomExists={roomExists}
+          roomConfig={roomConfig}
           onAdminLogin={handleAdminLogin}
           onParticipantLogin={handleParticipantLogin}
         />
       ) : currentUser.role === UserRole.ADMIN ? (
         <AdminView
-          roomCode={roomCode}
           roomConfig={roomConfig}
           gameState={gameState}
           participants={participants}
           onStart={startGame}
           onStop={stopGame}
-          onLeave={leaveRoom}
+          onReset={resetRoom}
         />
       ) : (
         <TraineeView

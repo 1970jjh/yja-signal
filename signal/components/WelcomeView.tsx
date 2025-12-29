@@ -4,20 +4,20 @@ import { RoomConfig } from '../types';
 import { INITIAL_QUESTIONS } from '../constants';
 
 interface Props {
+  roomExists: boolean;
+  roomConfig: RoomConfig | null;
   onAdminLogin: (config: RoomConfig) => void;
-  onParticipantLogin: (name: string, team: string, roomCode: string) => void;
+  onParticipantLogin: (name: string, team: string) => void;
 }
 
 type ViewMode = 'select' | 'admin' | 'participant';
 
-const WelcomeView: React.FC<Props> = ({ onAdminLogin, onParticipantLogin }) => {
+const WelcomeView: React.FC<Props> = ({ roomExists, roomConfig, onAdminLogin, onParticipantLogin }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('select');
 
   // 참가자 상태
-  const [roomCode, setRoomCode] = useState('');
   const [name, setName] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('Team 1');
-  const [teamCount, setTeamCount] = useState(4);
 
   // 관리자 상태
   const [password, setPassword] = useState('');
@@ -35,10 +35,6 @@ const WelcomeView: React.FC<Props> = ({ onAdminLogin, onParticipantLogin }) => {
     e.preventDefault();
     setError('');
 
-    if (!roomCode.trim()) {
-      setError('방 코드를 입력해주세요.');
-      return;
-    }
     if (!name.trim()) {
       setError('이름을 입력해주세요.');
       return;
@@ -46,9 +42,9 @@ const WelcomeView: React.FC<Props> = ({ onAdminLogin, onParticipantLogin }) => {
 
     setIsLoading(true);
     try {
-      await onParticipantLogin(name, selectedTeam, roomCode);
+      await onParticipantLogin(name, selectedTeam);
     } catch (err) {
-      setError('방 참가에 실패했습니다.');
+      setError('참가에 실패했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -93,10 +89,25 @@ const WelcomeView: React.FC<Props> = ({ onAdminLogin, onParticipantLogin }) => {
           </div>
         </div>
 
+        {/* 방 상태 표시 */}
+        <div className={`mb-8 p-4 border-4 border-black text-center ${roomExists ? 'bg-emerald-100' : 'bg-slate-100'}`}>
+          {roomExists ? (
+            <>
+              <p className="font-black text-emerald-600">● 게임 준비됨</p>
+              <p className="text-sm font-bold mt-1">{roomConfig?.roomName}</p>
+            </>
+          ) : (
+            <p className="font-black text-slate-500">○ 대기 중 (관리자가 방을 만들어야 합니다)</p>
+          )}
+        </div>
+
         <div className="space-y-4">
           <button
             onClick={() => setViewMode('participant')}
-            className="w-full py-6 brutal-button brutal-button-primary text-xl uppercase"
+            disabled={!roomExists}
+            className={`w-full py-6 brutal-button text-xl uppercase ${
+              roomExists ? 'brutal-button-primary' : 'bg-slate-300 cursor-not-allowed'
+            }`}
           >
             참가하기
           </button>
@@ -104,15 +115,17 @@ const WelcomeView: React.FC<Props> = ({ onAdminLogin, onParticipantLogin }) => {
             onClick={() => setViewMode('admin')}
             className="w-full py-4 brutal-button brutal-button-secondary text-lg uppercase"
           >
-            관리자로 방 만들기
+            관리자
           </button>
         </div>
       </div>
     );
   }
 
-  // 참가자 화면
+  // 참가자 화면 - 팀과 이름만 선택
   if (viewMode === 'participant') {
+    const teamCount = roomConfig?.teamCount || 4;
+
     return (
       <div className="brutal-card w-full max-w-md p-10">
         <button
@@ -123,22 +136,13 @@ const WelcomeView: React.FC<Props> = ({ onAdminLogin, onParticipantLogin }) => {
         </button>
 
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-black uppercase tracking-tighter">방 참가하기</h1>
+          <h1 className="text-3xl font-black text-black uppercase tracking-tighter">참가하기</h1>
+          {roomConfig && (
+            <p className="mt-2 text-indigo-600 font-bold">{roomConfig.roomName}</p>
+          )}
         </div>
 
         <form onSubmit={handleParticipantSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-black text-black mb-2 uppercase">방 코드</label>
-            <input
-              type="text"
-              value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-              placeholder="6자리 코드 입력"
-              maxLength={6}
-              className="w-full brutal-input font-black text-2xl text-center tracking-[0.5em] uppercase"
-            />
-          </div>
-
           <div>
             <label className="block text-sm font-black text-black mb-2 uppercase">팀 선택</label>
             <div className="grid grid-cols-2 gap-2">
@@ -147,18 +151,13 @@ const WelcomeView: React.FC<Props> = ({ onAdminLogin, onParticipantLogin }) => {
                   key={i + 1}
                   type="button"
                   onClick={() => setSelectedTeam(`Team ${i + 1}`)}
-                  className={`py-3 brutal-button font-black ${
+                  className={`py-4 brutal-button font-black text-lg ${
                     selectedTeam === `Team ${i + 1}` ? 'brutal-button-primary' : ''
                   }`}
                 >
                   Team {i + 1}
                 </button>
               ))}
-            </div>
-            <div className="mt-2 flex justify-center gap-2">
-              <button type="button" onClick={() => setTeamCount(Math.max(2, teamCount - 1))} className="brutal-button px-3 py-1">-</button>
-              <span className="font-black py-1">{teamCount}팀</span>
-              <button type="button" onClick={() => setTeamCount(Math.min(8, teamCount + 1))} className="brutal-button px-3 py-1">+</button>
             </div>
           </div>
 
@@ -169,7 +168,8 @@ const WelcomeView: React.FC<Props> = ({ onAdminLogin, onParticipantLogin }) => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="이름 입력"
-              className="w-full brutal-input font-black"
+              className="w-full brutal-input font-black text-xl"
+              autoFocus
             />
           </div>
 
@@ -182,11 +182,11 @@ const WelcomeView: React.FC<Props> = ({ onAdminLogin, onParticipantLogin }) => {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full py-5 brutal-button text-xl uppercase ${
+            className={`w-full py-6 brutal-button text-2xl uppercase ${
               isLoading ? 'bg-slate-300 cursor-wait' : 'brutal-button-success'
             }`}
           >
-            {isLoading ? '접속 중...' : '입장하기'}
+            {isLoading ? '접속 중...' : '입장!'}
           </button>
         </form>
       </div>
@@ -204,7 +204,7 @@ const WelcomeView: React.FC<Props> = ({ onAdminLogin, onParticipantLogin }) => {
       </button>
 
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-black text-black uppercase tracking-tighter">방 만들기</h1>
+        <h1 className="text-3xl font-black text-black uppercase tracking-tighter">관리자</h1>
       </div>
 
       <form onSubmit={handleAdminSubmit} className="space-y-6">
