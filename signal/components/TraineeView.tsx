@@ -206,21 +206,36 @@ const TraineeView: React.FC<Props> = ({
 
       {/* 팀원 목록 - 주인공 표시 */}
       <div className="brutal-card p-4 bg-white">
-        <p className="text-xs font-bold text-gray-500 mb-2">우리 팀 (★ 주인공 완료)</p>
+        <p className="text-xs font-bold text-gray-500 mb-2">우리 팀</p>
         <div className="flex flex-wrap gap-2">
           {teamMembers.map(member => {
             const isCurrentHero = currentHeroId[user.team] === member.id;
-            const wasHero = teamHeroHistory.includes(member.id);
+            // 주인공 횟수 계산 (heroHistory에서 해당 멤버 ID 카운트)
+            const heroCount = teamHeroHistory.filter(id => id === member.id).length;
             return (
               <div
                 key={member.id}
-                className={`px-3 py-2 border-2 border-black font-bold text-sm flex items-center gap-1 ${
-                  isCurrentHero ? 'bg-yellow-300' : wasHero ? 'bg-indigo-100' : 'bg-white'
+                className={`px-3 py-2 border-2 border-black font-bold text-sm flex flex-col items-center gap-1 ${
+                  isCurrentHero ? 'bg-yellow-300' : heroCount > 0 ? 'bg-indigo-100' : 'bg-white'
                 }`}
               >
-                {isCurrentHero ? '⭐' : wasHero ? '★' : '☆'}
-                <span>{member.name}</span>
-                <span className="text-xs text-gray-500">({individualScores[member.id] || 0})</span>
+                <div className="flex items-center gap-1">
+                  {isCurrentHero && '⭐'}
+                  <span>{member.name}</span>
+                </div>
+                {/* 야구 아웃카운트 스타일 - 주인공 횟수 표시 */}
+                <div className="flex gap-1">
+                  {[0, 1, 2].map(i => (
+                    <div
+                      key={i}
+                      className={`w-3 h-3 rounded-full border-2 ${
+                        i < heroCount
+                          ? 'bg-indigo-500 border-indigo-600'
+                          : 'bg-gray-200 border-gray-300'
+                      }`}
+                    />
+                  ))}
+                </div>
               </div>
             );
           })}
