@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd signal && npm install && npm run build",
+  "outputDirectory": "signal/dist",
+  "installCommand": "cd signal && npm install"
+}
