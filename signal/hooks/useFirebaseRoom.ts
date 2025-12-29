@@ -39,6 +39,7 @@ interface UseFirebaseRoomReturn {
   setHeroAnswer: (team: string, answer: 'O' | 'X') => void;
   submitMemberAnswer: (odUserId: string, team: string, answer: 'O' | 'X') => void;
   changeQuestion: (team: string, direction: 'next' | 'prev' | number) => void;
+  revealResult: (team: string) => void;
   nextRound: (team: string) => void;
 
   refreshRoomList: () => Promise<void>;
@@ -55,7 +56,9 @@ const initialGameState: GameState = {
   heroHistory: {},
   individualScores: {},
   memberAnswers: {},
-  roundCount: {}
+  roundCount: {},
+  resultRevealed: {},
+  resultRevealedAt: {}
 };
 
 export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
@@ -132,7 +135,9 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
             heroHistory: data.gameState.heroHistory ?? {},
             individualScores: data.gameState.individualScores ?? {},
             memberAnswers: data.gameState.memberAnswers ?? {},
-            roundCount: data.gameState.roundCount ?? {}
+            roundCount: data.gameState.roundCount ?? {},
+            resultRevealed: data.gameState.resultRevealed ?? {},
+            resultRevealedAt: data.gameState.resultRevealedAt ?? {}
           });
         } else {
           setGameState(initialGameState);
@@ -191,7 +196,9 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
       heroHistory: {},
       individualScores: {},
       memberAnswers: {},
-      roundCount: {}
+      roundCount: {},
+      resultRevealed: {},
+      resultRevealedAt: {}
     };
 
     try {
@@ -455,6 +462,17 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     set(questionIdxRef, newIdx);
   }, [currentRoomId, gameState]);
 
+  // 결과 공개 (주인공이 버튼 클릭)
+  const revealResult = useCallback((team: string) => {
+    if (!currentRoomId) return;
+
+    const revealedRef = ref(database, `rooms/${currentRoomId}/gameState/resultRevealed/${team}`);
+    const revealedAtRef = ref(database, `rooms/${currentRoomId}/gameState/resultRevealedAt/${team}`);
+
+    set(revealedRef, true);
+    set(revealedAtRef, Date.now());
+  }, [currentRoomId]);
+
   // 다음 라운드 (새 주인공)
   const nextRound = useCallback(async (team: string) => {
     if (!currentRoomId || !roomConfig) return;
@@ -498,6 +516,8 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     updates[`gameState/currentQuestionIndex/${team}`] = 0;
     updates[`gameState/memberAnswers/${team}`] = resetAnswers;
     updates[`gameState/roundCount/${team}`] = (gameState.roundCount[team] || 0) + 1;
+    updates[`gameState/resultRevealed/${team}`] = false;
+    updates[`gameState/resultRevealedAt/${team}`] = null;
 
     // 주인공 히스토리 업데이트
     if (notYetHero.length > 0) {
@@ -532,6 +552,7 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     setHeroAnswer,
     submitMemberAnswer,
     changeQuestion,
+    revealResult,
     nextRound,
     refreshRoomList
   };

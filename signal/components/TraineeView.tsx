@@ -10,6 +10,7 @@ interface Props {
   onHeroAction: (answer: 'O' | 'X') => void;
   onMemberAnswer: (odUserId: string, team: string, answer: 'O' | 'X') => void;
   onChangeQuestion: (team: string, direction: 'next' | 'prev' | number) => void;
+  onRevealResult: (team: string) => void;
   onNextRound: (team: string) => void;
 }
 
@@ -21,11 +22,12 @@ const TraineeView: React.FC<Props> = ({
   onHeroAction,
   onMemberAnswer,
   onChangeQuestion,
+  onRevealResult,
   onNextRound
 }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasAnswered, setHasAnswered] = useState(false);
-  const [showResult, setShowResult] = useState(false);
+  const [countdownLeft, setCountdownLeft] = useState<number | null>(null);
 
   // 안전하게 gameState 접근
   const currentHeroId = gameState?.currentHeroId || {};
@@ -35,6 +37,8 @@ const TraineeView: React.FC<Props> = ({
   const heroHistory = gameState?.heroHistory || {};
   const individualScores = gameState?.individualScores || {};
   const memberAnswers = gameState?.memberAnswers || {};
+  const resultRevealed = gameState?.resultRevealed || {};
+  const resultRevealedAt = gameState?.resultRevealedAt || {};
 
   const teamMembers = participants.filter(p => p.team === user.team);
   const isHero = currentHeroId[user.team] === user.id;
@@ -66,16 +70,26 @@ const TraineeView: React.FC<Props> = ({
   useEffect(() => {
     if (!heroAnswer) {
       setHasAnswered(false);
-      setShowResult(false);
+      setCountdownLeft(null);
     }
   }, [heroAnswer]);
 
-  // 팀원 답변 후 결과 표시
+  // 결과 공개 후 10초 카운트다운
+  const isResultRevealed = resultRevealed[user.team] || false;
+  const revealedAt = resultRevealedAt[user.team];
+
   useEffect(() => {
-    if (myAnswer && heroAnswer) {
-      setShowResult(true);
+    if (isResultRevealed && revealedAt) {
+      const interval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - revealedAt) / 1000);
+        const remaining = Math.max(0, 10 - elapsed);
+        setCountdownLeft(remaining);
+      }, 100);
+      return () => clearInterval(interval);
+    } else {
+      setCountdownLeft(null);
     }
-  }, [myAnswer, heroAnswer]);
+  }, [isResultRevealed, revealedAt]);
 
   // 팀원 점수 계산 및 정렬
   const getTeamScores = () => {
@@ -228,9 +242,9 @@ const TraineeView: React.FC<Props> = ({
               </p>
             </div>
 
-            {/* 질문 */}
+            {/* 질문 - 2배 크기 */}
             <div className="brutal-inset p-6 bg-slate-50 border-4 flex-1 flex items-center justify-center mb-4">
-              <h2 className="text-xl font-black text-center leading-relaxed">
+              <h2 className="text-3xl md:text-4xl font-black text-center leading-relaxed">
                 {currentQuestion || "질문 로딩 중..."}
               </h2>
             </div>
@@ -271,18 +285,42 @@ const TraineeView: React.FC<Props> = ({
                   X
                 </button>
               </div>
-            ) : (
+            ) : !isResultRevealed ? (
+              /* 결과 공개 전 - 결과공개 버튼 */
               <div className="space-y-4">
                 <div className="bg-black text-white p-6 border-4 border-black text-center">
                   <p className="text-xl font-black">선택 완료: {heroAnswer}</p>
                   <p className="text-sm opacity-70 mt-1">팀원들이 맞추는 중...</p>
                 </div>
                 <button
-                  onClick={handleNextRound}
-                  className="w-full py-4 brutal-button brutal-button-primary font-black text-lg"
+                  onClick={() => onRevealResult(user.team)}
+                  className="w-full py-4 brutal-button bg-yellow-400 hover:bg-yellow-500 font-black text-lg border-4 border-black"
                 >
-                  다음 주인공으로 →
+                  🎉 결과 공개 🎉
                 </button>
+              </div>
+            ) : (
+              /* 결과 공개 후 */
+              <div className="space-y-4">
+                <div className={`p-6 border-4 border-black text-center ${
+                  heroAnswer === 'O' ? 'bg-emerald-400' : 'bg-rose-400'
+                }`}>
+                  <p className="text-3xl font-black">정답: {heroAnswer}</p>
+                </div>
+                {countdownLeft !== null && countdownLeft > 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-lg font-bold text-gray-500">
+                      {countdownLeft}초 후 다음으로 넘어갈 수 있습니다
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleNextRound}
+                    className="w-full py-4 brutal-button brutal-button-primary font-black text-lg"
+                  >
+                    다음 주인공으로 →
+                  </button>
+                )}
               </div>
             )}
           </>
@@ -306,17 +344,18 @@ const TraineeView: React.FC<Props> = ({
                   <p className="text-sm text-gray-500 mt-2">잠시만 기다려주세요</p>
                 </div>
               </div>
-            ) : (
+            ) : !isResultRevealed ? (
+              /* 결과 공개 전 - 추측하기 */
               <>
-                {/* 질문 표시 */}
+                {/* 질문 표시 - 2배 크기 */}
                 <div className="brutal-inset p-6 bg-slate-50 border-4 flex-1 flex items-center justify-center mb-4">
-                  <h2 className="text-xl font-black text-center leading-relaxed">
+                  <h2 className="text-3xl md:text-4xl font-black text-center leading-relaxed">
                     {currentQuestion || "질문 로딩 중..."}
                   </h2>
                 </div>
 
                 {/* 추측하기 */}
-                {!showResult ? (
+                {!hasAnswered ? (
                   <div className="space-y-3">
                     <p className="text-center font-bold text-indigo-600">
                       주인공이 뭘 골랐을까요?
@@ -324,42 +363,73 @@ const TraineeView: React.FC<Props> = ({
                     <div className="grid grid-cols-2 gap-4">
                       <button
                         onClick={() => handleAnswer('O')}
-                        disabled={hasAnswered}
-                        className={`py-10 brutal-button text-6xl font-black ${
-                          hasAnswered ? 'bg-slate-200' : 'bg-emerald-100 hover:bg-emerald-200'
-                        }`}
+                        className="py-10 brutal-button text-6xl font-black bg-emerald-100 hover:bg-emerald-200"
                       >
                         O
                       </button>
                       <button
                         onClick={() => handleAnswer('X')}
-                        disabled={hasAnswered}
-                        className={`py-10 brutal-button text-6xl font-black ${
-                          hasAnswered ? 'bg-slate-200' : 'bg-rose-100 hover:bg-rose-200'
-                        }`}
+                        className="py-10 brutal-button text-6xl font-black bg-rose-100 hover:bg-rose-200"
                       >
                         X
                       </button>
                     </div>
                   </div>
                 ) : (
-                  /* 결과 표시 */
-                  <div className="space-y-4">
-                    <div className={`p-6 border-4 border-black text-center ${
-                      myAnswer === heroAnswer ? 'bg-emerald-400' : 'bg-rose-400'
-                    }`}>
-                      <p className="text-2xl font-black">
-                        {myAnswer === heroAnswer ? '✓ 정답! +100점' : '✗ 오답'}
-                      </p>
-                      <p className="text-sm mt-1">
-                        주인공 선택: {heroAnswer} / 내 선택: {myAnswer}
-                      </p>
-                    </div>
-                    <div className="text-center text-sm text-gray-500">
-                      주인공이 다음으로 넘기면 계속됩니다
+                  <div className="space-y-3">
+                    <div className="bg-black text-white p-6 border-4 border-black text-center">
+                      <p className="text-xl font-black">내 선택: {myAnswer}</p>
+                      <p className="text-sm opacity-70 mt-1">주인공이 결과를 공개하면 확인됩니다</p>
                     </div>
                   </div>
                 )}
+              </>
+            ) : (
+              /* 결과 공개 후 */
+              <>
+                {/* 질문 표시 - 2배 크기 */}
+                <div className="brutal-inset p-6 bg-slate-50 border-4 flex items-center justify-center mb-4">
+                  <h2 className="text-3xl md:text-4xl font-black text-center leading-relaxed">
+                    {currentQuestion || "질문 로딩 중..."}
+                  </h2>
+                </div>
+
+                {/* 결과 표시 */}
+                <div className="space-y-4">
+                  <div className={`p-6 border-4 border-black text-center ${
+                    heroAnswer === 'O' ? 'bg-emerald-400' : 'bg-rose-400'
+                  }`}>
+                    <p className="text-3xl font-black">정답: {heroAnswer}</p>
+                  </div>
+
+                  {myAnswer && (
+                    <div className={`p-4 border-4 border-black text-center ${
+                      myAnswer === heroAnswer ? 'bg-emerald-200' : 'bg-rose-200'
+                    }`}>
+                      <p className="text-xl font-black">
+                        {myAnswer === heroAnswer ? '✓ 정답! +100점' : '✗ 오답'}
+                      </p>
+                      <p className="text-sm mt-1">
+                        내 선택: {myAnswer}
+                      </p>
+                    </div>
+                  )}
+
+                  {countdownLeft !== null && countdownLeft > 0 ? (
+                    <div className="text-center py-4">
+                      <p className="text-lg font-bold text-gray-500">
+                        {countdownLeft}초 후 다음으로 넘어갈 수 있습니다
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleNextRound}
+                      className="w-full py-4 brutal-button brutal-button-primary font-black text-lg"
+                    >
+                      다음 주인공으로 →
+                    </button>
+                  )}
+                </div>
               </>
             )}
           </>

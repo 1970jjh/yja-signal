@@ -25,6 +25,7 @@ const App: React.FC = () => {
     setHeroAnswer,
     submitMemberAnswer,
     changeQuestion,
+    revealResult,
     nextRound,
     refreshRoomList
   } = useFirebaseRoom();
@@ -68,6 +69,11 @@ const App: React.FC = () => {
   // 질문 변경
   const handleChangeQuestion = (team: string, direction: 'next' | 'prev' | number) => {
     changeQuestion(team, direction);
+  };
+
+  // 결과 공개
+  const handleRevealResult = (team: string) => {
+    revealResult(team);
   };
 
   // 다음 라운드
@@ -122,6 +128,7 @@ const App: React.FC = () => {
           onHeroAction={handleHeroAction}
           onMemberAnswer={handleMemberAnswer}
           onChangeQuestion={handleChangeQuestion}
+          onRevealResult={handleRevealResult}
           onNextRound={handleNextRound}
         />
       )}
