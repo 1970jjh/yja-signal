@@ -498,18 +498,29 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
 
     const heroHistory = gameState.heroHistory[team] || [];
 
-    // 아직 주인공 안 한 사람 찾기
-    let nextHero: User | undefined;
-    const notYetHero = teamMembers.filter(m => !heroHistory.includes(m.id));
+    // 각 멤버별 주인공 횟수 계산
+    const heroCountMap: Record<string, number> = {};
+    teamMembers.forEach(m => {
+      heroCountMap[m.id] = heroHistory.filter(id => id === m.id).length;
+    });
 
-    if (notYetHero.length > 0) {
-      // 아직 안 한 사람 중 랜덤
-      const randomIdx = Math.floor(Math.random() * notYetHero.length);
-      nextHero = notYetHero[randomIdx];
+    // 3회 미만인 사람들 중 가장 적게 한 사람 찾기
+    const eligibleMembers = teamMembers.filter(m => heroCountMap[m.id] < 3);
+
+    let nextHero: User | undefined;
+    if (eligibleMembers.length > 0) {
+      // 가장 적게 주인공 한 횟수 찾기
+      const minCount = Math.min(...eligibleMembers.map(m => heroCountMap[m.id]));
+      // 그 횟수와 같은 사람들 중 랜덤 선택
+      const candidates = eligibleMembers.filter(m => heroCountMap[m.id] === minCount);
+      const randomIdx = Math.floor(Math.random() * candidates.length);
+      nextHero = candidates[randomIdx];
     } else {
-      // 모두 했으면 다시 처음부터 (히스토리 리셋)
-      const randomIdx = Math.floor(Math.random() * teamMembers.length);
-      nextHero = teamMembers[randomIdx];
+      // 모두 3회 완료 - 게임 계속하려면 가장 적은 사람 선택
+      const minCount = Math.min(...teamMembers.map(m => heroCountMap[m.id]));
+      const candidates = teamMembers.filter(m => heroCountMap[m.id] === minCount);
+      const randomIdx = Math.floor(Math.random() * candidates.length);
+      nextHero = candidates[randomIdx];
     }
 
     // 새 질문 4개 생성
@@ -531,13 +542,8 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     updates[`gameState/resultRevealed/${team}`] = false;
     updates[`gameState/resultRevealedAt/${team}`] = null;
 
-    // 주인공 히스토리 업데이트
-    if (notYetHero.length > 0) {
-      updates[`gameState/heroHistory/${team}`] = [...heroHistory, nextHero?.id];
-    } else {
-      // 리셋
-      updates[`gameState/heroHistory/${team}`] = [nextHero?.id];
-    }
+    // 주인공 히스토리 - 항상 누적 (리셋하지 않음)
+    updates[`gameState/heroHistory/${team}`] = [...heroHistory, nextHero?.id];
 
     const roomRef = ref(database, `rooms/${currentRoomId}`);
     await update(roomRef, updates);
