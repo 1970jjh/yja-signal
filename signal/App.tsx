@@ -14,18 +14,21 @@ const App: React.FC = () => {
     currentUser,
     isConnected,
     error,
-    roomExists,
+    roomList,
     createRoom,
     joinRoom,
+    joinRoomAsAdmin,
+    deleteRoom,
     startGame,
     stopGame,
     resetRoom,
     setHeroAnswer,
     nextRound,
-    updateGameState
+    updateGameState,
+    refreshRoomList
   } = useFirebaseRoom();
 
-  // 관리자 로그인 및 방 생성
+  // 관리자 - 새 방 생성
   const handleAdminLogin = async (config: Parameters<typeof createRoom>[0]) => {
     try {
       await createRoom(config);
@@ -34,9 +37,19 @@ const App: React.FC = () => {
     }
   };
 
+  // 관리자 - 기존 방 입장
+  const handleAdminJoinRoom = async (roomId: string) => {
+    await joinRoomAsAdmin(roomId);
+  };
+
   // 참가자 로그인
-  const handleParticipantLogin = async (name: string, team: string) => {
-    await joinRoom({ name, team, role: UserRole.TRAINEE });
+  const handleParticipantLogin = async (roomId: string, name: string, team: string) => {
+    await joinRoom(roomId, { name, team, role: UserRole.TRAINEE });
+  };
+
+  // 방 삭제
+  const handleDeleteRoom = async (roomId: string) => {
+    await deleteRoom(roomId);
   };
 
   // 히어로 액션
@@ -80,10 +93,12 @@ const App: React.FC = () => {
 
       {!currentUser ? (
         <WelcomeView
-          roomExists={roomExists}
-          roomConfig={roomConfig}
+          roomList={roomList}
           onAdminLogin={handleAdminLogin}
+          onAdminJoinRoom={handleAdminJoinRoom}
           onParticipantLogin={handleParticipantLogin}
+          onDeleteRoom={handleDeleteRoom}
+          onRefreshRooms={refreshRoomList}
         />
       ) : currentUser.role === UserRole.ADMIN ? (
         <AdminView
