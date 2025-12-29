@@ -8,22 +8,32 @@ interface Props {
   gameState: GameState;
   participants: User[];
   onHeroAction: (answer: 'O' | 'X') => void;
-  onTeamSync: (newState: GameState) => void;
+  onNextRound: (team: string, nextHeroId: string, nextQuestionIdx: number) => void;
+  onPass: (team: string, nextQuestionIdx: number) => void;
   isReadOnly?: boolean;
 }
 
-const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participants, onHeroAction, onTeamSync, isReadOnly = false }) => {
+const TraineeView: React.FC<Props> = ({
+  user,
+  roomConfig,
+  gameState,
+  participants,
+  onHeroAction,
+  onNextRound,
+  onPass,
+  isReadOnly = false
+}) => {
   const [passCount, setPassCount] = useState(3);
   const [userGuess, setUserGuess] = useState<'O' | 'X' | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [countdown, setCountdown] = useState(0);
-  const [showResult, setShowResult] = useState(false);
 
   const isHero = gameState.currentHeroId[user.team] === user.id;
   const currentQuestionIdx = gameState.questionIndices[user.team] || 0;
   const currentQuestion = roomConfig?.questions[currentQuestionIdx];
   const heroAnswer = gameState.heroAnswer[user.team];
 
+  // 타이머
   useEffect(() => {
     if (gameState.isStarted && roomConfig) {
       const interval = setInterval(() => {
@@ -35,8 +45,9 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
     }
   }, [gameState.isStarted, gameState.startTime, roomConfig]);
 
+  // 히어로가 답변 후 카운트다운
   useEffect(() => {
-    if (isHero && heroAnswer && !showResult && !isReadOnly) {
+    if (isHero && heroAnswer && !isReadOnly) {
       setCountdown(5);
       const timer = setInterval(() => {
         setCountdown(prev => {
@@ -51,54 +62,59 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [isHero, heroAnswer, showResult, isReadOnly]);
+  }, [isHero, heroAnswer, isReadOnly]);
+
+  // 히어로 답변이 변경되면 유저 추측 초기화
+  useEffect(() => {
+    if (!heroAnswer) {
+      setUserGuess(null);
+    }
+  }, [heroAnswer]);
 
   const handleNextRound = () => {
     if (!roomConfig || isReadOnly) return;
     const teamParticipants = participants.filter(p => p.team === user.team);
+    if (teamParticipants.length === 0) return;
+
     const currentHeroIdx = teamParticipants.findIndex(p => p.id === user.id);
     const nextHeroIdx = (currentHeroIdx + 1) % teamParticipants.length;
     const nextHeroId = teamParticipants[nextHeroIdx].id;
     const nextQIdx = Math.floor(Math.random() * roomConfig.questions.length);
 
-    const newState = {
-      ...gameState,
-      scores: { ...gameState.scores, [user.team]: (Number(gameState.scores[user.team]) || 0) + 100 },
-      currentHeroId: { ...gameState.currentHeroId, [user.team]: nextHeroId },
-      heroAnswer: { ...gameState.heroAnswer, [user.team]: null },
-      questionIndices: { ...gameState.questionIndices, [user.team]: nextQIdx },
-      roundCount: { ...gameState.roundCount, [user.team]: (Number(gameState.roundCount[user.team]) || 0) + 1 }
-    };
-    onTeamSync(newState);
+    onNextRound(user.team, nextHeroId, nextQIdx);
     setUserGuess(null);
   };
 
   const handlePass = () => {
-    if (passCount > 0 && roomConfig && !isReadOnly) {
+    if (passCount > 0 && roomConfig && !isReadOnly && !heroAnswer) {
       setPassCount(prev => prev - 1);
       const nextQIdx = Math.floor(Math.random() * roomConfig.questions.length);
-      onTeamSync({
-        ...gameState,
-        questionIndices: { ...gameState.questionIndices, [user.team]: nextQIdx }
-      });
+      onPass(user.team, nextQIdx);
     }
   };
 
   const handleGuess = (guess: 'O' | 'X') => {
-    if (isReadOnly) return;
+    if (isReadOnly || userGuess) return;
     setUserGuess(guess);
-    if (guess === heroAnswer) {
-      if (navigator.vibrate) navigator.vibrate(100);
+    if (guess === heroAnswer && navigator.vibrate) {
+      navigator.vibrate(100);
     }
   };
 
-  if (!roomConfig) return <div className="brutal-card p-12 text-center font-black">SYNCING SIGNAL DATA...</div>;
+  if (!roomConfig) {
+    return (
+      <div className="brutal-card p-12 text-center font-black">
+        <div className="animate-pulse">SYNCING SIGNAL DATA...</div>
+      </div>
+    );
+  }
 
+  // 게임 종료 화면
   if (gameState.isFinished) {
     const sortedTeams = Object.entries(gameState.scores).sort((a, b) => Number(b[1]) - Number(a[1]));
     const teamIndex = sortedTeams.findIndex(t => t[0] === user.team);
     const rank = (teamIndex === -1 ? 0 : teamIndex) + 1;
-    
+
     return (
       <div className="brutal-card p-12 w-full max-w-md text-center bg-yellow-300">
         <h2 className="text-5xl font-black mb-4 uppercase italic">OVER!</h2>
@@ -113,7 +129,10 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
           </div>
         </div>
         {!isReadOnly && (
-          <button onClick={() => window.location.reload()} className="w-full py-5 brutal-button brutal-button-primary text-xl uppercase">
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-5 brutal-button brutal-button-primary text-xl uppercase"
+          >
             REBOOT SIGNAL
           </button>
         )}
@@ -121,6 +140,7 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
     );
   }
 
+  // 대기 화면
   if (!gameState.isStarted) {
     return (
       <div className="brutal-card p-16 w-full max-w-md text-center bg-indigo-500">
@@ -133,6 +153,11 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
           <p className="text-xs font-black uppercase tracking-widest opacity-70 mb-2">My Profile</p>
           <p className="text-2xl font-black">{user.team} // {user.name}</p>
         </div>
+        <div className="mt-6 bg-white/20 p-4 rounded">
+          <p className="text-white/80 text-sm">
+            팀원 {participants.filter(p => p.team === user.team).length}명 대기 중
+          </p>
+        </div>
       </div>
     );
   }
@@ -142,7 +167,7 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
 
   return (
     <div className={`w-full max-w-xl space-y-8 ${isReadOnly ? 'scale-90 pointer-events-none' : ''}`}>
-      {/* Header Info */}
+      {/* 헤더 정보 */}
       <div className="flex justify-between items-stretch gap-6">
         <div className="brutal-card px-8 py-4 flex-1 bg-white">
           <p className="text-xs font-black uppercase italic mb-1">Time Left</p>
@@ -156,22 +181,23 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
         </div>
       </div>
 
-      {/* Main Game Interface */}
+      {/* 메인 게임 인터페이스 */}
       <div className="brutal-card p-10 min-h-[500px] flex flex-col items-center justify-between relative bg-white">
+        {/* 카운트다운 오버레이 */}
         {countdown > 0 && (
           <div className="absolute inset-0 bg-yellow-400 z-20 flex flex-col items-center justify-center border-4 border-black p-4">
-             <p className="text-3xl font-black text-black uppercase mb-6 italic">Next Signal Starting...</p>
-             <div className="w-24 h-24 bg-black text-white flex items-center justify-center text-6xl font-black shadow-[8px_8px_0px_#fff]">
-               {countdown}
-             </div>
+            <p className="text-3xl font-black text-black uppercase mb-6 italic">Next Signal Starting...</p>
+            <div className="w-24 h-24 bg-black text-white flex items-center justify-center text-6xl font-black shadow-[8px_8px_0px_#fff]">
+              {countdown}
+            </div>
           </div>
         )}
 
         <div className="w-full text-center">
           <div className={`inline-block border-2 border-black px-4 py-1 text-xs font-black mb-6 uppercase tracking-widest ${isHero ? 'bg-indigo-500 text-white' : 'bg-yellow-300 text-black'}`}>
-            {isHero ? 'You are the Hero' : `HERO: ${participants.find(p => p.id === gameState.currentHeroId[user.team])?.name}`}
+            {isHero ? 'You are the Hero' : `HERO: ${participants.find(p => p.id === gameState.currentHeroId[user.team])?.name || '...'}`}
           </div>
-          
+
           <div className="brutal-inset p-10 bg-slate-50 border-4 min-h-[220px] flex items-center justify-center mb-10 relative">
             <h2 className="text-3xl font-black text-black leading-tight uppercase">
               "{currentQuestion || "LOADING SIGNAL..."}"
@@ -204,7 +230,7 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
                   <p className="text-xs font-bold opacity-60 italic">Wait for your team to decode your heart signal!</p>
                 </div>
               )}
-              
+
               <div className="flex justify-center">
                 <button
                   disabled={passCount === 0 || !!heroAnswer}
@@ -220,14 +246,14 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
             <>
               {heroAnswer ? (
                 <div className="space-y-6">
-                   <p className="text-center font-black uppercase text-indigo-600 tracking-tighter text-xl">What is Hero's Choice?</p>
-                   <div className="grid grid-cols-2 gap-6">
+                  <p className="text-center font-black uppercase text-indigo-600 tracking-tighter text-xl">What is Hero's Choice?</p>
+                  <div className="grid grid-cols-2 gap-6">
                     <button
                       onClick={() => handleGuess('O')}
                       disabled={!!userGuess}
                       className={`py-12 brutal-button text-7xl font-black transition-all ${
-                        userGuess === 'O' 
-                          ? (userGuess === heroAnswer ? 'bg-emerald-400' : 'bg-slate-300') 
+                        userGuess === 'O'
+                          ? (userGuess === heroAnswer ? 'bg-emerald-400' : 'bg-slate-300')
                           : 'bg-white text-black'
                       }`}
                     >
@@ -237,8 +263,8 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
                       onClick={() => handleGuess('X')}
                       disabled={!!userGuess}
                       className={`py-12 brutal-button text-7xl font-black transition-all ${
-                        userGuess === 'X' 
-                          ? (userGuess === heroAnswer ? 'bg-emerald-400' : 'bg-slate-300') 
+                        userGuess === 'X'
+                          ? (userGuess === heroAnswer ? 'bg-emerald-400' : 'bg-slate-300')
                           : 'bg-white text-black'
                       }`}
                     >
@@ -253,7 +279,7 @@ const TraineeView: React.FC<Props> = ({ user, roomConfig, gameState, participant
                 </div>
               ) : (
                 <div className="text-center py-16 brutal-inset bg-black text-white">
-                   <p className="font-black text-xl uppercase italic tracking-widest animate-pulse">Waiting for Hero Signal...</p>
+                  <p className="font-black text-xl uppercase italic tracking-widest animate-pulse">Waiting for Hero Signal...</p>
                 </div>
               )}
             </>
