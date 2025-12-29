@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { RoomConfig, GameState, User, UserRole } from '../types';
 
 interface Props {
@@ -19,7 +19,6 @@ const AdminView: React.FC<Props> = ({
   onStop,
   onReset
 }) => {
-  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
   const traineeParticipants = participants.filter(p => p.role === UserRole.TRAINEE);
 
@@ -142,15 +141,11 @@ const AdminView: React.FC<Props> = ({
         <div className="space-y-4">
           {sortedTeams.map((teamName, teamRank) => {
             const data = getTeamData(teamName);
-            const isExpanded = expandedTeam === teamName;
 
             return (
               <div key={teamName} className="border-4 border-black bg-white">
                 {/* 팀 헤더 */}
-                <button
-                  onClick={() => setExpandedTeam(isExpanded ? null : teamName)}
-                  className="w-full p-4 flex justify-between items-center hover:bg-slate-50"
-                >
+                <div className="p-4 flex justify-between items-center bg-slate-100 border-b-4 border-black">
                   <div className="flex items-center gap-4">
                     <span className={`w-10 h-10 flex items-center justify-center font-black text-lg border-2 border-black ${
                       teamRank === 0 ? 'bg-yellow-300' : teamRank === 1 ? 'bg-slate-300' : teamRank === 2 ? 'bg-orange-300' : 'bg-white'
@@ -175,57 +170,54 @@ const AdminView: React.FC<Props> = ({
                       <p className="text-xs text-gray-500">팀 총점</p>
                       <p className="font-black text-2xl text-indigo-600">{data.totalScore}</p>
                     </div>
-                    <span className="text-2xl">{isExpanded ? '▲' : '▼'}</span>
                   </div>
-                </button>
+                </div>
 
-                {/* 개인 점수 (확장 시) */}
-                {isExpanded && (
-                  <div className="border-t-4 border-black p-4 bg-slate-50">
-                    {data.teamScores.length === 0 ? (
-                      <p className="text-center text-gray-500 py-4">아직 팀원이 없습니다</p>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-12 gap-2 text-xs font-bold text-gray-500 px-2">
-                          <span className="col-span-1">순위</span>
-                          <span className="col-span-5">이름</span>
-                          <span className="col-span-3 text-center">상태</span>
-                          <span className="col-span-3 text-right">점수</span>
-                        </div>
-                        {data.teamScores.map((member, idx) => {
-                          const isCurrentHero = currentHeroId[teamName] === member.id;
-                          const wasHero = heroHistory[teamName]?.includes(member.id);
-
-                          return (
-                            <div
-                              key={member.id}
-                              className={`grid grid-cols-12 gap-2 items-center px-2 py-2 ${
-                                isCurrentHero ? 'bg-yellow-200 border-2 border-yellow-500' : 'bg-white border-2 border-transparent'
-                              }`}
-                            >
-                              <span className="col-span-1 font-black">{idx + 1}</span>
-                              <span className="col-span-5 font-bold truncate">
-                                {isCurrentHero && '⭐ '}{member.name}
-                              </span>
-                              <span className="col-span-3 text-center text-xs">
-                                {isCurrentHero ? (
-                                  <span className="bg-yellow-300 px-2 py-1 font-bold">주인공</span>
-                                ) : wasHero ? (
-                                  <span className="text-gray-500">완료 ★</span>
-                                ) : (
-                                  <span className="text-gray-400">대기</span>
-                                )}
-                              </span>
-                              <span className="col-span-3 text-right font-black text-lg text-indigo-600">
-                                {member.score}점
-                              </span>
-                            </div>
-                          );
-                        })}
+                {/* 개인 점수 (항상 표시) */}
+                <div className="p-4 bg-white">
+                  {data.teamScores.length === 0 ? (
+                    <p className="text-center text-gray-500 py-4">아직 팀원이 없습니다</p>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-12 gap-2 text-xs font-bold text-gray-500 px-2">
+                        <span className="col-span-1">순위</span>
+                        <span className="col-span-5">이름</span>
+                        <span className="col-span-3 text-center">상태</span>
+                        <span className="col-span-3 text-right">점수</span>
                       </div>
-                    )}
-                  </div>
-                )}
+                      {data.teamScores.map((member, idx) => {
+                        const isCurrentHero = currentHeroId[teamName] === member.id;
+                        const wasHero = heroHistory[teamName]?.includes(member.id);
+
+                        return (
+                          <div
+                            key={member.id}
+                            className={`grid grid-cols-12 gap-2 items-center px-2 py-2 ${
+                              isCurrentHero ? 'bg-yellow-200 border-2 border-yellow-500' : 'bg-slate-50 border-2 border-transparent'
+                            }`}
+                          >
+                            <span className="col-span-1 font-black">{idx + 1}</span>
+                            <span className="col-span-5 font-bold truncate">
+                              {isCurrentHero && '⭐ '}{member.name}
+                            </span>
+                            <span className="col-span-3 text-center text-xs">
+                              {isCurrentHero ? (
+                                <span className="bg-yellow-300 px-2 py-1 font-bold">주인공</span>
+                              ) : wasHero ? (
+                                <span className="text-gray-500">완료 ★</span>
+                              ) : (
+                                <span className="text-gray-400">대기</span>
+                              )}
+                            </span>
+                            <span className="col-span-3 text-right font-black text-lg text-indigo-600">
+                              {member.score}점
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}

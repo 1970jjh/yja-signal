@@ -420,26 +420,13 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     });
   }, [currentRoomId]);
 
-  // 팀원 답변 제출 및 점수 계산
+  // 팀원 답변 제출 (점수는 결과공개 시 계산)
   const submitMemberAnswer = useCallback(async (odUserId: string, team: string, answer: 'O' | 'X') => {
     if (!currentRoomId) return;
 
-    // 답변 저장
+    // 답변만 저장 (점수는 결과공개 시 계산)
     const memberAnswerRef = ref(database, `rooms/${currentRoomId}/gameState/memberAnswers/${team}/${odUserId}`);
     await set(memberAnswerRef, answer);
-
-    // 주인공 답변 확인
-    const heroAnswerRef = ref(database, `rooms/${currentRoomId}/gameState/heroAnswer/${team}`);
-    const heroSnapshot = await get(heroAnswerRef);
-    const heroAnswer = heroSnapshot.val();
-
-    // 정답이면 100점 추가
-    if (heroAnswer && answer === heroAnswer) {
-      const scoreRef = ref(database, `rooms/${currentRoomId}/gameState/individualScores/${odUserId}`);
-      const scoreSnapshot = await get(scoreRef);
-      const currentScore = scoreSnapshot.val() || 0;
-      await set(scoreRef, currentScore + 100);
-    }
   }, [currentRoomId]);
 
   // 질문 변경 (다른 질문보기)
@@ -462,15 +449,40 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     set(questionIdxRef, newIdx);
   }, [currentRoomId, gameState]);
 
-  // 결과 공개 (주인공이 버튼 클릭)
-  const revealResult = useCallback((team: string) => {
+  // 결과 공개 (주인공이 버튼 클릭) - 이때 점수 계산
+  const revealResult = useCallback(async (team: string) => {
     if (!currentRoomId) return;
 
-    const revealedRef = ref(database, `rooms/${currentRoomId}/gameState/resultRevealed/${team}`);
-    const revealedAtRef = ref(database, `rooms/${currentRoomId}/gameState/resultRevealedAt/${team}`);
+    // 주인공 답변 가져오기
+    const heroAnswerRef = ref(database, `rooms/${currentRoomId}/gameState/heroAnswer/${team}`);
+    const heroSnapshot = await get(heroAnswerRef);
+    const heroAnswer = heroSnapshot.val();
 
-    set(revealedRef, true);
-    set(revealedAtRef, Date.now());
+    if (!heroAnswer) return;
+
+    // 팀원 답변 가져오기
+    const memberAnswersRef = ref(database, `rooms/${currentRoomId}/gameState/memberAnswers/${team}`);
+    const answersSnapshot = await get(memberAnswersRef);
+    const memberAnswers = answersSnapshot.val() || {};
+
+    // 정답 맞춘 팀원들에게 점수 부여
+    const scoreUpdates: Record<string, any> = {};
+    for (const [userId, answer] of Object.entries(memberAnswers)) {
+      if (answer === heroAnswer) {
+        const scoreRef = ref(database, `rooms/${currentRoomId}/gameState/individualScores/${userId}`);
+        const scoreSnapshot = await get(scoreRef);
+        const currentScore = scoreSnapshot.val() || 0;
+        scoreUpdates[`gameState/individualScores/${userId}`] = currentScore + 100;
+      }
+    }
+
+    // 결과 공개 상태 업데이트 + 점수 업데이트
+    const roomRef = ref(database, `rooms/${currentRoomId}`);
+    await update(roomRef, {
+      ...scoreUpdates,
+      [`gameState/resultRevealed/${team}`]: true,
+      [`gameState/resultRevealedAt/${team}`]: Date.now()
+    });
   }, [currentRoomId]);
 
   // 다음 라운드 (새 주인공)
