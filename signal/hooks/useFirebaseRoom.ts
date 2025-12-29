@@ -34,9 +34,13 @@ interface UseFirebaseRoomReturn {
   startGame: () => void;
   stopGame: () => void;
   resetRoom: () => void;
-  updateGameState: (newState: Partial<GameState>) => void;
+
+  // 게임 액션
   setHeroAnswer: (team: string, answer: 'O' | 'X') => void;
-  nextRound: (team: string, nextHeroId: string, nextQuestionIdx: number) => void;
+  submitMemberAnswer: (odUserId: string, team: string, answer: 'O' | 'X') => void;
+  changeQuestion: (team: string, direction: 'next' | 'prev' | number) => void;
+  nextRound: (team: string) => void;
+
   refreshRoomList: () => Promise<void>;
 }
 
@@ -46,9 +50,12 @@ const initialGameState: GameState = {
   startTime: null,
   currentHeroId: {},
   heroAnswer: {},
-  scores: {},
-  roundCount: {},
-  questionIndices: {}
+  currentQuestionIndex: {},
+  questionHistory: {},
+  heroHistory: {},
+  individualScores: {},
+  memberAnswers: {},
+  roundCount: {}
 };
 
 export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
@@ -79,7 +86,6 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
           isStarted: roomData.gameState?.isStarted || false
         }));
 
-        // 최신순 정렬
         rooms.sort((a, b) => b.createdAt - a.createdAt);
         setRoomList(rooms);
       } else {
@@ -114,7 +120,6 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
         setRoomExists(true);
         if (data.config) setRoomConfig(data.config);
 
-        // gameState를 기본값과 병합하여 안전하게 설정
         if (data.gameState) {
           setGameState({
             isStarted: data.gameState.isStarted ?? false,
@@ -122,9 +127,12 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
             startTime: data.gameState.startTime ?? null,
             currentHeroId: data.gameState.currentHeroId ?? {},
             heroAnswer: data.gameState.heroAnswer ?? {},
-            scores: data.gameState.scores ?? {},
-            roundCount: data.gameState.roundCount ?? {},
-            questionIndices: data.gameState.questionIndices ?? {}
+            currentQuestionIndex: data.gameState.currentQuestionIndex ?? {},
+            questionHistory: data.gameState.questionHistory ?? {},
+            heroHistory: data.gameState.heroHistory ?? {},
+            individualScores: data.gameState.individualScores ?? {},
+            memberAnswers: data.gameState.memberAnswers ?? {},
+            roundCount: data.gameState.roundCount ?? {}
           });
         } else {
           setGameState(initialGameState);
@@ -137,7 +145,6 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
           setParticipants([]);
         }
       } else {
-        // 방이 삭제됨
         setRoomExists(false);
         setRoomConfig(null);
         setGameState(initialGameState);
@@ -154,34 +161,37 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     return () => unsubscribe();
   }, [currentRoomId]);
 
-  // 방 생성 (새로운 고유 ID 생성)
+  // 랜덤 질문 인덱스 4개 생성
+  const generateQuestionHistory = useCallback((totalQuestions: number): number[] => {
+    const indices: number[] = [];
+    const used = new Set<number>();
+    while (indices.length < 4 && indices.length < totalQuestions) {
+      const idx = Math.floor(Math.random() * totalQuestions);
+      if (!used.has(idx)) {
+        used.add(idx);
+        indices.push(idx);
+      }
+    }
+    return indices;
+  }, []);
+
+  // 방 생성
   const createRoom = useCallback(async (config: RoomConfig): Promise<string> => {
     const roomId = 'room_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     const roomRef = ref(database, `rooms/${roomId}`);
-
-    const initialScores: Record<string, number> = {};
-    const initialHeroes: Record<string, string> = {};
-    const initialRounds: Record<string, number> = {};
-    const initialIndices: Record<string, number> = {};
-    const initialHeroAnswers: Record<string, null> = {};
-
-    for (let i = 1; i <= config.teamCount; i++) {
-      const teamName = `Team ${i}`;
-      initialScores[teamName] = 0;
-      initialRounds[teamName] = 0;
-      initialIndices[teamName] = 0;
-      initialHeroAnswers[teamName] = null;
-    }
 
     const newGameState: GameState = {
       isStarted: false,
       isFinished: false,
       startTime: null,
-      scores: initialScores,
-      currentHeroId: initialHeroes,
-      heroAnswer: initialHeroAnswers,
-      roundCount: initialRounds,
-      questionIndices: initialIndices
+      currentHeroId: {},
+      heroAnswer: {},
+      currentQuestionIndex: {},
+      questionHistory: {},
+      heroHistory: {},
+      individualScores: {},
+      memberAnswers: {},
+      roundCount: {}
     };
 
     try {
@@ -192,7 +202,6 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
         createdAt: Date.now()
       });
 
-      // 관리자로 로그인
       const adminUser: User = {
         id: 'admin_' + Date.now(),
         name: '관리자',
@@ -204,8 +213,6 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
       setCurrentRoomId(roomId);
       setCurrentUser(adminUser);
       setError(null);
-
-      // 방 목록 갱신
       await refreshRoomList();
 
       return roomId;
@@ -264,19 +271,12 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
         score: 0
       };
 
-      // 참가자 추가
       const participantRef = ref(database, `rooms/${roomId}/participants/${newUser.id}`);
       await set(participantRef, newUser);
 
-      // 팀의 첫 번째 멤버면 히어로로 설정
-      const roomData = snapshot.val();
-      const existingParticipants = roomData.participants ? Object.values(roomData.participants) as User[] : [];
-      const teamMembers = existingParticipants.filter((p: User) => p.team === newUser.team);
-
-      if (teamMembers.length === 0 && userData.role === UserRole.TRAINEE) {
-        const heroRef = ref(database, `rooms/${roomId}/gameState/currentHeroId/${newUser.team}`);
-        await set(heroRef, newUser.id);
-      }
+      // 개인 점수 초기화
+      const scoreRef = ref(database, `rooms/${roomId}/gameState/individualScores/${newUser.id}`);
+      await set(scoreRef, 0);
 
       setCurrentRoomId(roomId);
       setCurrentUser(newUser);
@@ -307,7 +307,6 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
       await remove(roomRef);
       await refreshRoomList();
 
-      // 현재 입장한 방이 삭제되면 나가기
       if (currentRoomId === roomId) {
         setCurrentUser(null);
         setCurrentRoomId(null);
@@ -318,7 +317,7 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     }
   }, [currentRoomId, refreshRoomList]);
 
-  // 방 초기화 (현재 방 삭제)
+  // 방 초기화
   const resetRoom = useCallback(async () => {
     if (currentRoomId) {
       await deleteRoom(currentRoomId);
@@ -327,16 +326,61 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     setCurrentRoomId(null);
   }, [currentRoomId, deleteRoom]);
 
-  // 게임 시작
-  const startGame = useCallback(() => {
-    if (!currentRoomId) return;
+  // 게임 시작 - 각 팀별로 랜덤 주인공 선정
+  const startGame = useCallback(async () => {
+    if (!currentRoomId || !roomConfig) return;
+
+    const roomRef = ref(database, `rooms/${currentRoomId}`);
+    const snapshot = await get(roomRef);
+    if (!snapshot.exists()) return;
+
+    const data = snapshot.val();
+    const allParticipants = data.participants ? Object.values(data.participants) as User[] : [];
+
+    const newHeroIds: Record<string, string> = {};
+    const newHeroHistory: Record<string, string[]> = {};
+    const newQuestionHistory: Record<string, number[]> = {};
+    const newCurrentQuestionIndex: Record<string, number> = {};
+    const newMemberAnswers: Record<string, Record<string, null>> = {};
+
+    for (let i = 1; i <= roomConfig.teamCount; i++) {
+      const teamName = `팀 ${i}`;
+      const teamMembers = allParticipants.filter((p: User) => p.team === teamName);
+
+      if (teamMembers.length > 0) {
+        // 랜덤으로 첫 주인공 선정
+        const randomIdx = Math.floor(Math.random() * teamMembers.length);
+        const firstHero = teamMembers[randomIdx];
+        newHeroIds[teamName] = firstHero.id;
+        newHeroHistory[teamName] = [firstHero.id];
+
+        // 질문 4개 생성
+        const questions = generateQuestionHistory(roomConfig.questions.length);
+        newQuestionHistory[teamName] = questions;
+        newCurrentQuestionIndex[teamName] = 0;
+
+        // 팀원 답변 초기화
+        newMemberAnswers[teamName] = {};
+        teamMembers.forEach((m: User) => {
+          newMemberAnswers[teamName][m.id] = null;
+        });
+      }
+    }
+
     const gameStateRef = ref(database, `rooms/${currentRoomId}/gameState`);
-    update(gameStateRef, {
+    await update(gameStateRef, {
       isStarted: true,
       isFinished: false,
-      startTime: Date.now()
+      startTime: Date.now(),
+      currentHeroId: newHeroIds,
+      heroAnswer: {},
+      currentQuestionIndex: newCurrentQuestionIndex,
+      questionHistory: newQuestionHistory,
+      heroHistory: newHeroHistory,
+      memberAnswers: newMemberAnswers,
+      roundCount: {}
     });
-  }, [currentRoomId]);
+  }, [currentRoomId, roomConfig, generateQuestionHistory]);
 
   // 게임 종료
   const stopGame = useCallback(() => {
@@ -348,37 +392,124 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     });
   }, [currentRoomId]);
 
-  // 게임 상태 업데이트
-  const updateGameState = useCallback((newState: Partial<GameState>) => {
-    if (!currentRoomId) return;
-    const gameStateRef = ref(database, `rooms/${currentRoomId}/gameState`);
-    update(gameStateRef, newState);
-  }, [currentRoomId]);
-
-  // 히어로 답변 설정
+  // 주인공 답변 설정
   const setHeroAnswer = useCallback((team: string, answer: 'O' | 'X') => {
     if (!currentRoomId) return;
     const answerRef = ref(database, `rooms/${currentRoomId}/gameState/heroAnswer/${team}`);
     set(answerRef, answer);
+
+    // 팀원 답변 초기화
+    const memberAnswersRef = ref(database, `rooms/${currentRoomId}/gameState/memberAnswers/${team}`);
+    get(ref(database, `rooms/${currentRoomId}/participants`)).then(snapshot => {
+      if (snapshot.exists()) {
+        const allParticipants = Object.values(snapshot.val()) as User[];
+        const teamMembers = allParticipants.filter(p => p.team === team);
+        const resetAnswers: Record<string, null> = {};
+        teamMembers.forEach(m => {
+          resetAnswers[m.id] = null;
+        });
+        set(memberAnswersRef, resetAnswers);
+      }
+    });
   }, [currentRoomId]);
 
-  // 다음 라운드로 이동
-  const nextRound = useCallback((team: string, nextHeroId: string, nextQuestionIdx: number) => {
+  // 팀원 답변 제출 및 점수 계산
+  const submitMemberAnswer = useCallback(async (odUserId: string, team: string, answer: 'O' | 'X') => {
     if (!currentRoomId) return;
 
-    const currentScores = gameState.scores || {};
-    const currentRoundCount = gameState.roundCount || {};
+    // 답변 저장
+    const memberAnswerRef = ref(database, `rooms/${currentRoomId}/gameState/memberAnswers/${team}/${odUserId}`);
+    await set(memberAnswerRef, answer);
+
+    // 주인공 답변 확인
+    const heroAnswerRef = ref(database, `rooms/${currentRoomId}/gameState/heroAnswer/${team}`);
+    const heroSnapshot = await get(heroAnswerRef);
+    const heroAnswer = heroSnapshot.val();
+
+    // 정답이면 100점 추가
+    if (heroAnswer && answer === heroAnswer) {
+      const scoreRef = ref(database, `rooms/${currentRoomId}/gameState/individualScores/${odUserId}`);
+      const scoreSnapshot = await get(scoreRef);
+      const currentScore = scoreSnapshot.val() || 0;
+      await set(scoreRef, currentScore + 100);
+    }
+  }, [currentRoomId]);
+
+  // 질문 변경 (다른 질문보기)
+  const changeQuestion = useCallback((team: string, direction: 'next' | 'prev' | number) => {
+    if (!currentRoomId) return;
+
+    const currentHistory = gameState.questionHistory[team] || [];
+    const currentIdx = gameState.currentQuestionIndex[team] || 0;
+
+    let newIdx: number;
+    if (typeof direction === 'number') {
+      newIdx = direction;
+    } else if (direction === 'next') {
+      newIdx = (currentIdx + 1) % currentHistory.length;
+    } else {
+      newIdx = (currentIdx - 1 + currentHistory.length) % currentHistory.length;
+    }
+
+    const questionIdxRef = ref(database, `rooms/${currentRoomId}/gameState/currentQuestionIndex/${team}`);
+    set(questionIdxRef, newIdx);
+  }, [currentRoomId, gameState]);
+
+  // 다음 라운드 (새 주인공)
+  const nextRound = useCallback(async (team: string) => {
+    if (!currentRoomId || !roomConfig) return;
+
+    const snapshot = await get(ref(database, `rooms/${currentRoomId}/participants`));
+    if (!snapshot.exists()) return;
+
+    const allParticipants = Object.values(snapshot.val()) as User[];
+    const teamMembers = allParticipants.filter(p => p.team === team);
+    if (teamMembers.length === 0) return;
+
+    const heroHistory = gameState.heroHistory[team] || [];
+
+    // 아직 주인공 안 한 사람 찾기
+    let nextHero: User | undefined;
+    const notYetHero = teamMembers.filter(m => !heroHistory.includes(m.id));
+
+    if (notYetHero.length > 0) {
+      // 아직 안 한 사람 중 랜덤
+      const randomIdx = Math.floor(Math.random() * notYetHero.length);
+      nextHero = notYetHero[randomIdx];
+    } else {
+      // 모두 했으면 다시 처음부터 (히스토리 리셋)
+      const randomIdx = Math.floor(Math.random() * teamMembers.length);
+      nextHero = teamMembers[randomIdx];
+    }
+
+    // 새 질문 4개 생성
+    const newQuestions = generateQuestionHistory(roomConfig.questions.length);
+
+    // 팀원 답변 초기화
+    const resetAnswers: Record<string, null> = {};
+    teamMembers.forEach(m => {
+      resetAnswers[m.id] = null;
+    });
 
     const updates: Record<string, any> = {};
-    updates[`gameState/scores/${team}`] = (currentScores[team] || 0) + 100;
-    updates[`gameState/currentHeroId/${team}`] = nextHeroId;
+    updates[`gameState/currentHeroId/${team}`] = nextHero?.id;
     updates[`gameState/heroAnswer/${team}`] = null;
-    updates[`gameState/questionIndices/${team}`] = nextQuestionIdx;
-    updates[`gameState/roundCount/${team}`] = (currentRoundCount[team] || 0) + 1;
+    updates[`gameState/questionHistory/${team}`] = newQuestions;
+    updates[`gameState/currentQuestionIndex/${team}`] = 0;
+    updates[`gameState/memberAnswers/${team}`] = resetAnswers;
+    updates[`gameState/roundCount/${team}`] = (gameState.roundCount[team] || 0) + 1;
+
+    // 주인공 히스토리 업데이트
+    if (notYetHero.length > 0) {
+      updates[`gameState/heroHistory/${team}`] = [...heroHistory, nextHero?.id];
+    } else {
+      // 리셋
+      updates[`gameState/heroHistory/${team}`] = [nextHero?.id];
+    }
 
     const roomRef = ref(database, `rooms/${currentRoomId}`);
-    update(roomRef, updates);
-  }, [currentRoomId, gameState]);
+    await update(roomRef, updates);
+  }, [currentRoomId, roomConfig, gameState, generateQuestionHistory]);
 
   return {
     roomConfig,
@@ -398,8 +529,9 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     startGame,
     stopGame,
     resetRoom,
-    updateGameState,
     setHeroAnswer,
+    submitMemberAnswer,
+    changeQuestion,
     nextRound,
     refreshRoomList
   };

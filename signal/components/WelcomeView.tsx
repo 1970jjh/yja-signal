@@ -29,7 +29,7 @@ const WelcomeView: React.FC<Props> = ({
 
   // 참가자 상태
   const [name, setName] = useState('');
-  const [selectedTeam, setSelectedTeam] = useState('Team 1');
+  const [selectedTeam, setSelectedTeam] = useState('팀 1');
 
   // 관리자 상태
   const [password, setPassword] = useState('');
@@ -56,7 +56,7 @@ const WelcomeView: React.FC<Props> = ({
 
   const handleRoomSelect = (room: RoomInfo) => {
     setSelectedRoom(room);
-    setSelectedTeam('Team 1');
+    setSelectedTeam('팀 1');
     setViewMode('participant-join');
   };
 
@@ -213,12 +213,12 @@ const WelcomeView: React.FC<Props> = ({
                 <button
                   key={i + 1}
                   type="button"
-                  onClick={() => setSelectedTeam(`Team ${i + 1}`)}
+                  onClick={() => setSelectedTeam(`팀 ${i + 1}`)}
                   className={`py-4 brutal-button font-black text-lg ${
-                    selectedTeam === `Team ${i + 1}` ? 'brutal-button-primary' : ''
+                    selectedTeam === `팀 ${i + 1}` ? 'brutal-button-primary' : ''
                   }`}
                 >
-                  Team {i + 1}
+                  팀 {i + 1}
                 </button>
               ))}
             </div>
