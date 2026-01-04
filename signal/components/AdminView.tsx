@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { RoomConfig, GameState, User, UserRole } from '../types';
 
 interface Props {
@@ -22,12 +22,17 @@ const AdminView: React.FC<Props> = ({
 
   const traineeParticipants = participants.filter(p => p.role === UserRole.TRAINEE);
 
+  // 모달 상태
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
+
   // 안전하게 gameState 가져오기
   const currentHeroId = gameState?.currentHeroId || {};
   const heroAnswer = gameState?.heroAnswer || {};
   const individualScores = gameState?.individualScores || {};
   const heroHistory = gameState?.heroHistory || {};
   const roundCount = gameState?.roundCount || {};
+  const questionHistory = gameState?.questionHistory || {};
+  const currentQuestionIndex = gameState?.currentQuestionIndex || {};
 
   // 팀별 데이터 계산
   const getTeamData = (teamName: string) => {
@@ -44,7 +49,13 @@ const AdminView: React.FC<Props> = ({
     const rounds = roundCount[teamName] || 0;
     const herosDone = heroHistory[teamName]?.length || 0;
 
-    return { members, teamScores, totalScore, hero, answer, rounds, herosDone };
+    // 현재 문제 정보
+    const teamQuestionHistory = questionHistory[teamName] || [];
+    const teamCurrentIndex = currentQuestionIndex[teamName] ?? 0;
+    const currentQuestionIdx = teamQuestionHistory[teamCurrentIndex];
+    const currentQuestion = roomConfig?.questions?.[currentQuestionIdx] || null;
+
+    return { members, teamScores, totalScore, hero, answer, rounds, herosDone, currentQuestion, teamQuestionHistory, teamCurrentIndex };
   };
 
   if (!roomConfig) {
@@ -210,6 +221,7 @@ const AdminView: React.FC<Props> = ({
                 <tr className="bg-black text-white">
                   <th className="px-4 py-3 font-black text-sm">팀</th>
                   <th className="px-4 py-3 font-black text-sm">현재 주인공</th>
+                  <th className="px-4 py-3 font-black text-sm">현재 문제</th>
                   <th className="px-4 py-3 font-black text-sm">선택</th>
                   <th className="px-4 py-3 font-black text-sm">라운드</th>
                   <th className="px-4 py-3 font-black text-sm">팀 점수</th>
@@ -222,6 +234,19 @@ const AdminView: React.FC<Props> = ({
                     <tr key={team} className="hover:bg-yellow-50">
                       <td className="px-4 py-3 font-black text-indigo-600">{team}</td>
                       <td className="px-4 py-3 font-bold">{data.hero?.name || '-'}</td>
+                      <td className="px-4 py-3">
+                        {data.currentQuestion ? (
+                          <button
+                            onClick={() => setSelectedTeam(team)}
+                            className="brutal-badge bg-indigo-100 hover:bg-indigo-200 cursor-pointer text-left max-w-[200px] truncate transition-colors"
+                            title={data.currentQuestion}
+                          >
+                            📋 {data.currentQuestion.slice(0, 20)}...
+                          </button>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         {data.answer ? (
                           <span className={`brutal-badge ${data.answer === 'O' ? 'bg-emerald-400' : 'bg-rose-400'}`}>
@@ -238,6 +263,85 @@ const AdminView: React.FC<Props> = ({
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* 문제 보기 모달 */}
+      {selectedTeam && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setSelectedTeam(null)}
+        >
+          <div
+            className="brutal-card bg-white p-8 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6 border-b-4 border-black pb-4">
+              <h2 className="text-2xl font-black">{selectedTeam} 현재 문제</h2>
+              <button
+                onClick={() => setSelectedTeam(null)}
+                className="brutal-button px-4 py-2 bg-slate-200 hover:bg-slate-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            {(() => {
+              const data = getTeamData(selectedTeam);
+              return (
+                <div className="space-y-6">
+                  {/* 주인공 정보 */}
+                  <div className="brutal-inset p-4 bg-yellow-50">
+                    <p className="text-sm text-gray-600 mb-1">현재 주인공</p>
+                    <p className="font-black text-xl">⭐ {data.hero?.name || '-'}</p>
+                  </div>
+
+                  {/* 현재 문제 */}
+                  <div className="brutal-inset p-4 bg-indigo-50">
+                    <p className="text-sm text-gray-600 mb-2">
+                      현재 문제 ({data.teamCurrentIndex + 1}/4)
+                    </p>
+                    <p className="font-black text-lg leading-relaxed">
+                      {data.currentQuestion || '문제 없음'}
+                    </p>
+                  </div>
+
+                  {/* 주인공 선택 */}
+                  {data.answer && (
+                    <div className="brutal-inset p-4 bg-emerald-50">
+                      <p className="text-sm text-gray-600 mb-1">주인공 선택</p>
+                      <p className={`font-black text-3xl ${data.answer === 'O' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {data.answer}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 전체 문제 목록 */}
+                  <div className="brutal-inset p-4 bg-slate-50">
+                    <p className="text-sm text-gray-600 mb-3">이번 라운드 문제 (4개)</p>
+                    <div className="space-y-2">
+                      {data.teamQuestionHistory.map((qIdx, idx) => {
+                        const question = roomConfig?.questions?.[qIdx];
+                        const isCurrent = idx === data.teamCurrentIndex;
+                        return (
+                          <div
+                            key={idx}
+                            className={`p-3 border-2 border-black ${
+                              isCurrent ? 'bg-yellow-200 font-bold' : 'bg-white'
+                            }`}
+                          >
+                            <span className="text-indigo-600 mr-2">{idx + 1}.</span>
+                            {question || '질문 없음'}
+                            {isCurrent && <span className="ml-2 text-xs brutal-badge bg-yellow-400">현재</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
