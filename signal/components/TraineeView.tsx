@@ -1,6 +1,39 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { User, RoomConfig, GameState } from '../types';
+
+// 축하 사운드 재생 함수
+const playCelebrationSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+
+    // 빠밤 사운드 - 두 개의 상승하는 음
+    const playNote = (frequency: number, startTime: number, duration: number) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = frequency;
+      oscillator.type = 'sine';
+
+      gainNode.gain.setValueAtTime(0.3, startTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    };
+
+    const now = audioContext.currentTime;
+    // 빠 (낮은 음)
+    playNote(523.25, now, 0.2);  // C5
+    // 밤 (높은 음)
+    playNote(783.99, now + 0.2, 0.4);  // G5
+  } catch (e) {
+    console.log('Audio not supported');
+  }
+};
 
 interface Props {
   user: User;
@@ -35,6 +68,8 @@ const TraineeView: React.FC<Props> = ({
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [showConfetti, setShowConfetti] = useState(false);
+  const celebrationPlayedRef = useRef(false);
 
   // 안전하게 gameState 접근
   const currentHeroId = gameState?.currentHeroId || {};
@@ -112,6 +147,17 @@ const TraineeView: React.FC<Props> = ({
     }
   }, [isResultRevealed, myAnswer, heroAnswer]);
 
+  // 게임 종료 시 축하 사운드 및 컨페티
+  useEffect(() => {
+    if (gameState?.isFinished && !celebrationPlayedRef.current) {
+      celebrationPlayedRef.current = true;
+      playCelebrationSound();
+      setShowConfetti(true);
+      // 5초 후 컨페티 숨기기
+      setTimeout(() => setShowConfetti(false), 5000);
+    }
+  }, [gameState?.isFinished]);
+
   // 팀원 점수 계산 및 정렬
   const getTeamScores = () => {
     return teamMembers
@@ -150,26 +196,71 @@ const TraineeView: React.FC<Props> = ({
   if (gameState?.isFinished) {
     const sortedScores = getTeamScores();
     const myRank = sortedScores.findIndex(s => s.id === user.id) + 1;
+    const isFirstPlace = myRank === 1;
 
     return (
-      <div className="brutal-card p-8 w-full max-w-md text-center bg-yellow-300">
-        <h2 className="text-4xl font-black mb-6">게임 종료!</h2>
+      <div className={`brutal-card p-8 w-full max-w-md text-center relative overflow-hidden ${isFirstPlace ? 'bg-gradient-to-b from-yellow-300 via-yellow-400 to-orange-400' : 'bg-yellow-300'}`}>
+        {/* 컨페티 효과 */}
+        {showConfetti && (
+          <div className="absolute inset-0 pointer-events-none">
+            {[...Array(50)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute animate-bounce"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  animationDuration: `${1 + Math.random() * 2}s`,
+                  fontSize: `${12 + Math.random() * 16}px`
+                }}
+              >
+                {['🎉', '🎊', '⭐', '✨', '🏆', '💫'][Math.floor(Math.random() * 6)]}
+              </div>
+            ))}
+          </div>
+        )}
 
-        <div className="brutal-inset p-6 bg-white border-4 mb-6">
+        {/* 1위 축하 헤더 */}
+        {isFirstPlace ? (
+          <div className="mb-6">
+            <div className="text-6xl mb-2">🏆</div>
+            <h2 className="text-4xl font-black text-white drop-shadow-lg" style={{ textShadow: '2px 2px 0 #000' }}>
+              축하합니다!
+            </h2>
+            <p className="text-xl font-black mt-2" style={{ textShadow: '1px 1px 0 #000', color: 'white' }}>
+              🥇 팀 내 1위! 🥇
+            </p>
+          </div>
+        ) : (
+          <h2 className="text-4xl font-black mb-6">게임 종료!</h2>
+        )}
+
+        <div className={`brutal-inset p-6 border-4 mb-6 ${isFirstPlace ? 'bg-yellow-100 border-yellow-600' : 'bg-white'}`}>
           <p className="text-lg font-black mb-2">나의 순위</p>
-          <p className="text-6xl font-black text-indigo-600">{myRank}등</p>
+          <p className={`text-6xl font-black ${isFirstPlace ? 'text-yellow-600' : 'text-indigo-600'}`}>
+            {isFirstPlace ? '🥇' : myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : ''} {myRank}등
+          </p>
           <p className="text-2xl font-bold mt-2">{individualScores[user.id] || 0}점</p>
         </div>
 
         <div className="brutal-inset p-4 bg-white border-4 mb-6">
-          <p className="text-sm font-black mb-3">우리 팀 순위</p>
+          <p className="text-sm font-black mb-3">🏅 우리 팀 최종 순위</p>
           <div className="space-y-2">
             {sortedScores.map((member, idx) => (
               <div
                 key={member.id}
-                className={`flex justify-between items-center p-2 ${member.id === user.id ? 'bg-indigo-100 border-2 border-indigo-500' : ''}`}
+                className={`flex justify-between items-center p-2 rounded ${
+                  member.id === user.id
+                    ? 'bg-indigo-100 border-2 border-indigo-500'
+                    : idx === 0
+                      ? 'bg-yellow-100 border-2 border-yellow-500'
+                      : ''
+                }`}
               >
-                <span className="font-bold">{idx + 1}. {member.name}</span>
+                <span className="font-bold">
+                  {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`} {member.name}
+                </span>
                 <span className="font-black">{member.score}점</span>
               </div>
             ))}

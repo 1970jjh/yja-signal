@@ -107,6 +107,12 @@ const App: React.FC = () => {
     leaveRoom();
   };
 
+  // 관리자 로그아웃
+  const handleAdminLogout = () => {
+    clearSession();
+    window.location.reload();
+  };
+
   // 세션 복원 중 로딩 화면
   if (isRestoring) {
     return (
@@ -156,6 +162,7 @@ const App: React.FC = () => {
           onStop={stopGame}
           onReset={resetRoom}
           onSkipHero={handleSkipHero}
+          onLogout={handleAdminLogout}
         />
       ) : (
         <TraineeView

@@ -10,6 +10,7 @@ interface Props {
   onStop: () => void;
   onReset: () => void;
   onSkipHero: (team: string) => void;
+  onLogout: () => void;
 }
 
 const AdminView: React.FC<Props> = ({
@@ -19,7 +20,8 @@ const AdminView: React.FC<Props> = ({
   onStart,
   onStop,
   onReset,
-  onSkipHero
+  onSkipHero,
+  onLogout
 }) => {
 
   const traineeParticipants = participants.filter(p => p.role === UserRole.TRAINEE);
@@ -120,6 +122,16 @@ const AdminView: React.FC<Props> = ({
             className="px-6 py-4 brutal-button brutal-button-secondary"
           >
             초기화
+          </button>
+          <button
+            onClick={() => {
+              if (confirm('로그아웃 하시겠습니까?')) {
+                onLogout();
+              }
+            }}
+            className="px-6 py-4 brutal-button bg-slate-600 text-white hover:bg-slate-700"
+          >
+            나가기
           </button>
         </div>
       </div>
