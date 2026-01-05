@@ -235,6 +235,20 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     return () => clearTimeout(timeoutId);
   }, [currentRoomId, roomConfig, gameState.isStarted, gameState.isFinished, gameState.currentHeroId, participants]);
 
+  // 세션 저장 (먼저 정의해야 joinRoom에서 사용 가능)
+  const saveSession = useCallback((roomId: string, user: User) => {
+    try {
+      localStorage.setItem('yja-signal-session', JSON.stringify({ roomId, user, timestamp: Date.now() }));
+    } catch (e) {
+      console.error('Failed to save session:', e);
+    }
+  }, []);
+
+  // 세션 삭제 (먼저 정의해야 leaveRoom에서 사용 가능)
+  const clearSession = useCallback(() => {
+    localStorage.removeItem('yja-signal-session');
+  }, []);
+
   // 랜덤 질문 인덱스 4개 생성
   const generateQuestionHistory = useCallback((totalQuestions: number): number[] => {
     const indices: number[] = [];
@@ -712,15 +726,6 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     await update(roomRef, updates);
   }, [currentRoomId, roomConfig, gameState, generateQuestionHistory]);
 
-  // 세션 저장
-  const saveSession = useCallback((roomId: string, user: User) => {
-    try {
-      localStorage.setItem('yja-signal-session', JSON.stringify({ roomId, user, timestamp: Date.now() }));
-    } catch (e) {
-      console.error('Failed to save session:', e);
-    }
-  }, []);
-
   // 세션 복원
   const restoreSession = useCallback(async (): Promise<boolean> => {
     try {
@@ -776,11 +781,6 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
       localStorage.removeItem('yja-signal-session');
       return false;
     }
-  }, []);
-
-  // 세션 삭제
-  const clearSession = useCallback(() => {
-    localStorage.removeItem('yja-signal-session');
   }, []);
 
   return {
