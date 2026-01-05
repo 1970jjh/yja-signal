@@ -177,6 +177,7 @@ const App: React.FC = () => {
           onNextRound={handleNextRound}
           onLeaveRoom={handleLeaveRoom}
           onSwitchToAdmin={switchToAdmin}
+          onTimeUp={stopGame}
         />
       )}
     </div>

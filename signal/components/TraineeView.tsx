@@ -47,6 +47,7 @@ interface Props {
   onNextRound: (team: string) => void;
   onLeaveRoom: () => void;
   onSwitchToAdmin: () => void;
+  onTimeUp: () => void;
 }
 
 const TraineeView: React.FC<Props> = ({
@@ -60,7 +61,8 @@ const TraineeView: React.FC<Props> = ({
   onRevealResult,
   onNextRound,
   onLeaveRoom,
-  onSwitchToAdmin
+  onSwitchToAdmin,
+  onTimeUp
 }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasAnswered, setHasAnswered] = useState(false);
@@ -107,6 +109,24 @@ const TraineeView: React.FC<Props> = ({
       return () => clearInterval(interval);
     }
   }, [gameState?.isStarted, gameState?.startTime, roomConfig]);
+
+  // 타이머 종료 시 자동 게임 종료
+  const timeUpCalledRef = useRef(false);
+  useEffect(() => {
+    if (gameState?.isStarted && !gameState?.isFinished && timeLeft === 0 && roomConfig && !timeUpCalledRef.current) {
+      // 게임이 시작된 후 시간이 0이 되면 게임 종료
+      const total = Number(roomConfig.durationMinutes) * 60;
+      const elapsed = Math.floor((Date.now() - (Number(gameState.startTime) || Date.now())) / 1000);
+      if (elapsed >= total) {
+        timeUpCalledRef.current = true;
+        onTimeUp();
+      }
+    }
+    // 게임이 새로 시작되면 ref 초기화
+    if (!gameState?.isStarted) {
+      timeUpCalledRef.current = false;
+    }
+  }, [timeLeft, gameState?.isStarted, gameState?.isFinished, gameState?.startTime, roomConfig, onTimeUp]);
 
   // 주인공 답변이 바뀌면 초기화
   useEffect(() => {
