@@ -12,6 +12,7 @@ interface Props {
   onChangeQuestion: (team: string, direction: 'next' | 'prev' | number) => void;
   onRevealResult: (team: string) => void;
   onNextRound: (team: string) => void;
+  onLeaveRoom: () => void;
 }
 
 const TraineeView: React.FC<Props> = ({
@@ -23,7 +24,8 @@ const TraineeView: React.FC<Props> = ({
   onMemberAnswer,
   onChangeQuestion,
   onRevealResult,
-  onNextRound
+  onNextRound,
+  onLeaveRoom
 }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasAnswered, setHasAnswered] = useState(false);
@@ -180,7 +182,17 @@ const TraineeView: React.FC<Props> = ({
   // 대기 화면
   if (!gameState?.isStarted) {
     return (
-      <div className="brutal-card p-12 w-full max-w-md text-center bg-indigo-500">
+      <div className="brutal-card p-12 w-full max-w-md text-center bg-indigo-500 relative">
+        <button
+          onClick={() => {
+            if (confirm('방을 나가시겠습니까?')) {
+              onLeaveRoom();
+            }
+          }}
+          className="absolute top-4 left-4 brutal-button px-4 py-2 bg-white text-black text-sm font-bold"
+        >
+          ← 뒤로가기
+        </button>
         <div className="w-20 h-20 bg-white border-4 border-black flex items-center justify-center mx-auto mb-8">
           <span className="text-4xl animate-pulse">📡</span>
         </div>
