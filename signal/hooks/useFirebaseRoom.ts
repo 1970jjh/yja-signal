@@ -41,8 +41,11 @@ interface UseFirebaseRoomReturn {
   changeQuestion: (team: string, direction: 'next' | 'prev' | number) => void;
   revealResult: (team: string) => void;
   nextRound: (team: string) => void;
+  skipToNextHero: (team: string) => void; // 관리자용 순서넘기기
 
   refreshRoomList: () => Promise<void>;
+  restoreSession: () => Promise<boolean>; // 세션 복원
+  clearSession: () => void; // 세션 삭제
 }
 
 const initialGameState: GameState = {
@@ -166,6 +169,72 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     return () => unsubscribe();
   }, [currentRoomId]);
 
+  // 주인공 이탈 감지 및 자동 교체
+  useEffect(() => {
+    if (!currentRoomId || !roomConfig || !gameState.isStarted || gameState.isFinished) return;
+
+    const checkAndReplaceHero = async () => {
+      const currentHeroIds = gameState.currentHeroId || {};
+
+      for (const teamName of Object.keys(currentHeroIds)) {
+        const heroId = currentHeroIds[teamName];
+        const teamMembers = participants.filter(p => p.team === teamName);
+
+        // 주인공이 팀원 목록에 없으면 자동 교체
+        if (heroId && teamMembers.length > 0 && !teamMembers.find(m => m.id === heroId)) {
+          console.log(`주인공 이탈 감지: ${teamName}, 자동 교체 실행`);
+
+          const heroHistory = gameState.heroHistory[teamName] || [];
+          const heroCountMap: Record<string, number> = {};
+          teamMembers.forEach(m => {
+            heroCountMap[m.id] = heroHistory.filter(id => id === m.id).length;
+          });
+
+          // 가장 적게 주인공 한 사람 선택
+          const minCount = Math.min(...teamMembers.map(m => heroCountMap[m.id] || 0));
+          const candidates = teamMembers.filter(m => (heroCountMap[m.id] || 0) === minCount);
+          const randomIdx = Math.floor(Math.random() * candidates.length);
+          const nextHero = candidates[randomIdx];
+
+          if (nextHero) {
+            // 새 질문 생성
+            const indices: number[] = [];
+            const used = new Set<number>();
+            while (indices.length < 4 && indices.length < roomConfig.questions.length) {
+              const idx = Math.floor(Math.random() * roomConfig.questions.length);
+              if (!used.has(idx)) {
+                used.add(idx);
+                indices.push(idx);
+              }
+            }
+
+            // 팀원 답변 초기화
+            const resetAnswers: Record<string, null> = {};
+            teamMembers.forEach(m => {
+              resetAnswers[m.id] = null;
+            });
+
+            const updates: Record<string, any> = {};
+            updates[`gameState/currentHeroId/${teamName}`] = nextHero.id;
+            updates[`gameState/heroAnswer/${teamName}`] = null;
+            updates[`gameState/questionHistory/${teamName}`] = indices;
+            updates[`gameState/currentQuestionIndex/${teamName}`] = 0;
+            updates[`gameState/memberAnswers/${teamName}`] = resetAnswers;
+            updates[`gameState/resultRevealed/${teamName}`] = false;
+            updates[`gameState/resultRevealedAt/${teamName}`] = null;
+
+            const roomRef = ref(database, `rooms/${currentRoomId}`);
+            await update(roomRef, updates);
+          }
+        }
+      }
+    };
+
+    // 약간의 딜레이 후 체크 (동시 접속 안정화)
+    const timeoutId = setTimeout(checkAndReplaceHero, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [currentRoomId, roomConfig, gameState.isStarted, gameState.isFinished, gameState.currentHeroId, participants]);
+
   // 랜덤 질문 인덱스 4개 생성
   const generateQuestionHistory = useCallback((totalQuestions: number): number[] => {
     const indices: number[] = [];
@@ -261,7 +330,7 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     }
   }, []);
 
-  // 방 참가 (참가자)
+  // 방 참가 (참가자) - 동명이인 처리 및 게임 진행 중 참여 지원
   const joinRoom = useCallback(async (roomId: string, userData: Omit<User, 'id' | 'score'>): Promise<boolean> => {
     const roomRef = ref(database, `rooms/${roomId}`);
 
@@ -272,18 +341,44 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
         return false;
       }
 
+      const roomData = snapshot.val();
+      const existingParticipants = roomData.participants ? Object.values(roomData.participants) as User[] : [];
+
+      // 같은 팀에 같은 이름이 있으면 기존 사람 삭제 (동명이인 처리)
+      const duplicateUser = existingParticipants.find(
+        p => p.team === userData.team && p.name === userData.name
+      );
+
+      if (duplicateUser) {
+        // 기존 사용자 삭제
+        const duplicateRef = ref(database, `rooms/${roomId}/participants/${duplicateUser.id}`);
+        await remove(duplicateRef);
+        // 기존 사용자의 memberAnswers도 삭제
+        const duplicateAnswerRef = ref(database, `rooms/${roomId}/gameState/memberAnswers/${userData.team}/${duplicateUser.id}`);
+        await remove(duplicateAnswerRef);
+      }
+
       const newUser: User = {
         ...userData,
         id: 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-        score: 0
+        score: duplicateUser ? (roomData.gameState?.individualScores?.[duplicateUser.id] || 0) : 0 // 기존 점수 유지
       };
 
       const participantRef = ref(database, `rooms/${roomId}/participants/${newUser.id}`);
       await set(participantRef, newUser);
 
-      // 개인 점수 초기화
+      // 개인 점수 초기화 (동명이인이면 기존 점수 이전)
       const scoreRef = ref(database, `rooms/${roomId}/gameState/individualScores/${newUser.id}`);
-      await set(scoreRef, 0);
+      await set(scoreRef, newUser.score);
+
+      // 게임이 진행 중이면 memberAnswers에 추가
+      if (roomData.gameState?.isStarted && !roomData.gameState?.isFinished) {
+        const memberAnswerRef = ref(database, `rooms/${roomId}/gameState/memberAnswers/${userData.team}/${newUser.id}`);
+        await set(memberAnswerRef, null);
+      }
+
+      // 세션 저장
+      saveSession(roomId, newUser);
 
       setCurrentRoomId(roomId);
       setCurrentUser(newUser);
@@ -295,7 +390,7 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
       setError('방 참가에 실패했습니다.');
       return false;
     }
-  }, []);
+  }, [saveSession]);
 
   // 방 나가기
   const leaveRoom = useCallback(() => {
@@ -303,9 +398,10 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
       const participantRef = ref(database, `rooms/${currentRoomId}/participants/${currentUser.id}`);
       remove(participantRef);
     }
+    clearSession();
     setCurrentUser(null);
     setCurrentRoomId(null);
-  }, [currentUser, currentRoomId]);
+  }, [currentUser, currentRoomId, clearSession]);
 
   // 방 삭제
   const deleteRoom = useCallback(async (roomId: string) => {
@@ -549,6 +645,144 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     await update(roomRef, updates);
   }, [currentRoomId, roomConfig, gameState, generateQuestionHistory]);
 
+  // 관리자용 순서넘기기 (현재 주인공 스킵)
+  const skipToNextHero = useCallback(async (team: string) => {
+    if (!currentRoomId || !roomConfig) return;
+
+    const snapshot = await get(ref(database, `rooms/${currentRoomId}/participants`));
+    if (!snapshot.exists()) return;
+
+    const allParticipants = Object.values(snapshot.val()) as User[];
+    const teamMembers = allParticipants.filter(p => p.team === team);
+    if (teamMembers.length === 0) return;
+
+    const heroHistory = gameState.heroHistory[team] || [];
+    const currentHeroId = gameState.currentHeroId[team];
+
+    // 각 멤버별 주인공 횟수 계산
+    const heroCountMap: Record<string, number> = {};
+    teamMembers.forEach(m => {
+      heroCountMap[m.id] = heroHistory.filter(id => id === m.id).length;
+    });
+
+    // 현재 주인공 제외하고 선택
+    const otherMembers = teamMembers.filter(m => m.id !== currentHeroId);
+    if (otherMembers.length === 0) {
+      // 혼자라면 그대로 유지
+      return;
+    }
+
+    // 3회 미만인 사람들 중 가장 적게 한 사람
+    const eligibleMembers = otherMembers.filter(m => heroCountMap[m.id] < 3);
+
+    let nextHero: User | undefined;
+    if (eligibleMembers.length > 0) {
+      const minCount = Math.min(...eligibleMembers.map(m => heroCountMap[m.id]));
+      const candidates = eligibleMembers.filter(m => heroCountMap[m.id] === minCount);
+      const randomIdx = Math.floor(Math.random() * candidates.length);
+      nextHero = candidates[randomIdx];
+    } else {
+      const minCount = Math.min(...otherMembers.map(m => heroCountMap[m.id]));
+      const candidates = otherMembers.filter(m => heroCountMap[m.id] === minCount);
+      const randomIdx = Math.floor(Math.random() * candidates.length);
+      nextHero = candidates[randomIdx];
+    }
+
+    // 새 질문 4개 생성
+    const newQuestions = generateQuestionHistory(roomConfig.questions.length);
+
+    // 팀원 답변 초기화
+    const resetAnswers: Record<string, null> = {};
+    teamMembers.forEach(m => {
+      resetAnswers[m.id] = null;
+    });
+
+    const updates: Record<string, any> = {};
+    updates[`gameState/currentHeroId/${team}`] = nextHero?.id;
+    updates[`gameState/heroAnswer/${team}`] = null;
+    updates[`gameState/questionHistory/${team}`] = newQuestions;
+    updates[`gameState/currentQuestionIndex/${team}`] = 0;
+    updates[`gameState/memberAnswers/${team}`] = resetAnswers;
+    updates[`gameState/roundCount/${team}`] = (gameState.roundCount[team] || 0) + 1;
+    updates[`gameState/resultRevealed/${team}`] = false;
+    updates[`gameState/resultRevealedAt/${team}`] = null;
+    updates[`gameState/heroHistory/${team}`] = [...heroHistory, nextHero?.id];
+
+    const roomRef = ref(database, `rooms/${currentRoomId}`);
+    await update(roomRef, updates);
+  }, [currentRoomId, roomConfig, gameState, generateQuestionHistory]);
+
+  // 세션 저장
+  const saveSession = useCallback((roomId: string, user: User) => {
+    try {
+      localStorage.setItem('yja-signal-session', JSON.stringify({ roomId, user, timestamp: Date.now() }));
+    } catch (e) {
+      console.error('Failed to save session:', e);
+    }
+  }, []);
+
+  // 세션 복원
+  const restoreSession = useCallback(async (): Promise<boolean> => {
+    try {
+      const saved = localStorage.getItem('yja-signal-session');
+      if (!saved) return false;
+
+      const { roomId, user, timestamp } = JSON.parse(saved);
+
+      // 24시간 이상 지난 세션은 무시
+      if (Date.now() - timestamp > 24 * 60 * 60 * 1000) {
+        localStorage.removeItem('yja-signal-session');
+        return false;
+      }
+
+      // 방이 존재하는지 확인
+      const roomRef = ref(database, `rooms/${roomId}`);
+      const snapshot = await get(roomRef);
+      if (!snapshot.exists()) {
+        localStorage.removeItem('yja-signal-session');
+        return false;
+      }
+
+      // 관리자인 경우
+      if (user.role === UserRole.ADMIN) {
+        setCurrentRoomId(roomId);
+        setCurrentUser(user);
+        return true;
+      }
+
+      // 참가자인 경우 - 기존 사용자가 있는지 확인 후 복원
+      const participantRef = ref(database, `rooms/${roomId}/participants/${user.id}`);
+      const participantSnapshot = await get(participantRef);
+
+      if (participantSnapshot.exists()) {
+        // 기존 참가자 정보가 있으면 그대로 복원
+        setCurrentRoomId(roomId);
+        setCurrentUser(user);
+        return true;
+      } else {
+        // 참가자 정보가 없으면 다시 등록
+        await set(participantRef, user);
+        const scoreRef = ref(database, `rooms/${roomId}/gameState/individualScores/${user.id}`);
+        const scoreSnapshot = await get(scoreRef);
+        if (!scoreSnapshot.exists()) {
+          await set(scoreRef, 0);
+        }
+        setCurrentRoomId(roomId);
+        setCurrentUser(user);
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to restore session:', e);
+      localStorage.removeItem('yja-signal-session');
+      return false;
+    }
+  }, []);
+
+  // 세션 삭제
+  const clearSession = useCallback(() => {
+    localStorage.removeItem('yja-signal-session');
+  }, []);
+
   return {
     roomConfig,
     gameState,
@@ -572,6 +806,9 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     changeQuestion,
     revealResult,
     nextRound,
-    refreshRoomList
+    skipToNextHero,
+    refreshRoomList,
+    restoreSession,
+    clearSession
   };
 };

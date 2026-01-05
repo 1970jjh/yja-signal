@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserRole } from './types';
 import { useFirebaseRoom } from './hooks/useFirebaseRoom';
 import AdminView from './components/AdminView';
@@ -7,6 +7,8 @@ import TraineeView from './components/TraineeView';
 import WelcomeView from './components/WelcomeView';
 
 const App: React.FC = () => {
+  const [isRestoring, setIsRestoring] = useState(true);
+
   const {
     roomConfig,
     gameState,
@@ -18,6 +20,7 @@ const App: React.FC = () => {
     createRoom,
     joinRoom,
     joinRoomAsAdmin,
+    leaveRoom,
     deleteRoom,
     startGame,
     stopGame,
@@ -27,8 +30,20 @@ const App: React.FC = () => {
     changeQuestion,
     revealResult,
     nextRound,
-    refreshRoomList
+    skipToNextHero,
+    refreshRoomList,
+    restoreSession,
+    clearSession
   } = useFirebaseRoom();
+
+  // 앱 시작 시 세션 복원 시도
+  useEffect(() => {
+    const restore = async () => {
+      await restoreSession();
+      setIsRestoring(false);
+    };
+    restore();
+  }, [restoreSession]);
 
   // 관리자 - 새 방 생성
   const handleAdminLogin = async (config: Parameters<typeof createRoom>[0]) => {
@@ -81,6 +96,27 @@ const App: React.FC = () => {
     nextRound(team);
   };
 
+  // 순서넘기기 (관리자용)
+  const handleSkipHero = (team: string) => {
+    skipToNextHero(team);
+  };
+
+  // 방 나가기 (참가자용)
+  const handleLeaveRoom = () => {
+    leaveRoom();
+  };
+
+  // 세션 복원 중 로딩 화면
+  if (isRestoring) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="brutal-card p-12 text-center font-black">
+          <div className="animate-pulse">세션 복원 중...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen p-4 md:p-8 flex items-center justify-center">
       {/* 연결 상태 표시 */}
@@ -118,6 +154,7 @@ const App: React.FC = () => {
           onStart={startGame}
           onStop={stopGame}
           onReset={resetRoom}
+          onSkipHero={handleSkipHero}
         />
       ) : (
         <TraineeView
@@ -130,6 +167,7 @@ const App: React.FC = () => {
           onChangeQuestion={handleChangeQuestion}
           onRevealResult={handleRevealResult}
           onNextRound={handleNextRound}
+          onLeaveRoom={handleLeaveRoom}
         />
       )}
     </div>

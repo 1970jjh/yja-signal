@@ -9,6 +9,7 @@ interface Props {
   onStart: () => void;
   onStop: () => void;
   onReset: () => void;
+  onSkipHero: (team: string) => void;
 }
 
 const AdminView: React.FC<Props> = ({
@@ -17,7 +18,8 @@ const AdminView: React.FC<Props> = ({
   participants,
   onStart,
   onStop,
-  onReset
+  onReset,
+  onSkipHero
 }) => {
 
   const traineeParticipants = participants.filter(p => p.role === UserRole.TRAINEE);
@@ -225,6 +227,7 @@ const AdminView: React.FC<Props> = ({
                   <th className="px-4 py-3 font-black text-sm">선택</th>
                   <th className="px-4 py-3 font-black text-sm">라운드</th>
                   <th className="px-4 py-3 font-black text-sm">팀 점수</th>
+                  <th className="px-4 py-3 font-black text-sm">관리</th>
                 </tr>
               </thead>
               <tbody className="divide-y-2 divide-black">
@@ -258,6 +261,23 @@ const AdminView: React.FC<Props> = ({
                       </td>
                       <td className="px-4 py-3 font-bold">{data.rounds}</td>
                       <td className="px-4 py-3 font-black text-xl">{data.totalScore}</td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => {
+                            if (confirm(`${team}의 주인공을 다음 사람으로 넘기시겠습니까?`)) {
+                              onSkipHero(team);
+                            }
+                          }}
+                          disabled={data.members.length <= 1}
+                          className={`brutal-button px-3 py-2 text-xs font-bold ${
+                            data.members.length <= 1
+                              ? 'bg-slate-200 cursor-not-allowed text-slate-400'
+                              : 'bg-orange-400 hover:bg-orange-500 text-white'
+                          }`}
+                        >
+                          순서넘기기
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
