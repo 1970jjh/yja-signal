@@ -271,6 +271,72 @@ const TraineeView: React.FC<Props> = ({
           <p className="text-sm font-bold">팀 총점</p>
           <p className="text-3xl font-black">{teamTotalScore}점</p>
         </div>
+
+        {/* 하단 버튼 */}
+        <div className="grid grid-cols-2 gap-4 mt-6">
+          <button
+            onClick={() => {
+              if (confirm('방을 나가시겠습니까?')) {
+                onLeaveRoom();
+              }
+            }}
+            className="py-3 brutal-button bg-gray-200 hover:bg-gray-300 font-bold text-sm border-4 border-black"
+          >
+            나가기
+          </button>
+          <button
+            onClick={() => setShowAdminModal(true)}
+            className="py-3 brutal-button bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm border-4 border-black"
+          >
+            대시보드
+          </button>
+        </div>
+
+        {/* 관리자 비밀번호 모달 */}
+        {showAdminModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="brutal-card p-6 bg-white max-w-sm w-full mx-4">
+              <h3 className="text-xl font-black mb-4">관리자 비밀번호</h3>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="비밀번호 입력"
+                className="w-full p-3 border-4 border-black mb-2 font-bold"
+              />
+              {passwordError && (
+                <p className="text-red-500 text-sm font-bold mb-2">{passwordError}</p>
+              )}
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => {
+                    setShowAdminModal(false);
+                    setAdminPassword('');
+                    setPasswordError('');
+                  }}
+                  className="flex-1 py-2 brutal-button bg-gray-200 font-bold"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={() => {
+                    if (adminPassword === '6749467') {
+                      setShowAdminModal(false);
+                      setAdminPassword('');
+                      setPasswordError('');
+                      onSwitchToAdmin();
+                    } else {
+                      setPasswordError('비밀번호가 틀렸습니다');
+                    }
+                  }}
+                  className="flex-1 py-2 brutal-button brutal-button-primary font-bold"
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
