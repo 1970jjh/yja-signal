@@ -31,6 +31,7 @@ const App: React.FC = () => {
     revealResult,
     nextRound,
     skipToNextHero,
+    switchToAdmin,
     refreshRoomList,
     restoreSession,
     clearSession
@@ -168,6 +169,7 @@ const App: React.FC = () => {
           onRevealResult={handleRevealResult}
           onNextRound={handleNextRound}
           onLeaveRoom={handleLeaveRoom}
+          onSwitchToAdmin={switchToAdmin}
         />
       )}
     </div>

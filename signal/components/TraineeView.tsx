@@ -13,6 +13,7 @@ interface Props {
   onRevealResult: (team: string) => void;
   onNextRound: (team: string) => void;
   onLeaveRoom: () => void;
+  onSwitchToAdmin: () => void;
 }
 
 const TraineeView: React.FC<Props> = ({
@@ -25,11 +26,15 @@ const TraineeView: React.FC<Props> = ({
   onChangeQuestion,
   onRevealResult,
   onNextRound,
-  onLeaveRoom
+  onLeaveRoom,
+  onSwitchToAdmin
 }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasAnswered, setHasAnswered] = useState(false);
   const [countdownLeft, setCountdownLeft] = useState<number | null>(null);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   // 안전하게 gameState 접근
   const currentHeroId = gameState?.currentHeroId || {};
@@ -496,6 +501,89 @@ const TraineeView: React.FC<Props> = ({
           ))}
         </div>
       </div>
+
+      {/* 하단 버튼들 */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => {
+            if (confirm('방을 나가시겠습니까? 재접속하면 다시 참여할 수 있습니다.')) {
+              onLeaveRoom();
+            }
+          }}
+          className="flex-1 py-3 brutal-button bg-slate-200 hover:bg-slate-300 text-sm font-bold"
+        >
+          나가기
+        </button>
+        <button
+          onClick={() => setShowAdminModal(true)}
+          className="flex-1 py-3 brutal-button bg-indigo-100 hover:bg-indigo-200 text-sm font-bold"
+        >
+          대시보드
+        </button>
+      </div>
+
+      {/* 관리자 비밀번호 모달 */}
+      {showAdminModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => {
+            setShowAdminModal(false);
+            setAdminPassword('');
+            setPasswordError('');
+          }}
+        >
+          <div
+            className="brutal-card bg-white p-6 w-full max-w-sm mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-black mb-4 border-b-4 border-black pb-2">관리자 인증</h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (adminPassword === '6749467') {
+                  setShowAdminModal(false);
+                  setAdminPassword('');
+                  setPasswordError('');
+                  onSwitchToAdmin();
+                } else {
+                  setPasswordError('비밀번호가 올바르지 않습니다.');
+                }
+              }}
+            >
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="관리자 비밀번호"
+                className="w-full brutal-input mb-3 text-center font-black"
+                autoFocus
+              />
+              {passwordError && (
+                <p className="text-rose-500 text-sm font-bold mb-3">{passwordError}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdminModal(false);
+                    setAdminPassword('');
+                    setPasswordError('');
+                  }}
+                  className="flex-1 py-3 brutal-button bg-slate-200"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 brutal-button brutal-button-primary"
+                >
+                  확인
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

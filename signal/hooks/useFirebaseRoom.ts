@@ -42,6 +42,7 @@ interface UseFirebaseRoomReturn {
   revealResult: (team: string) => void;
   nextRound: (team: string) => void;
   skipToNextHero: (team: string) => void; // 관리자용 순서넘기기
+  switchToAdmin: () => void; // 참가자에서 관리자로 전환
 
   refreshRoomList: () => Promise<void>;
   restoreSession: () => Promise<boolean>; // 세션 복원
@@ -726,6 +727,22 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     await update(roomRef, updates);
   }, [currentRoomId, roomConfig, gameState, generateQuestionHistory]);
 
+  // 참가자에서 관리자로 전환
+  const switchToAdmin = useCallback(() => {
+    const adminUser: User = {
+      id: 'admin_' + Date.now(),
+      name: '관리자',
+      team: 'Admin',
+      role: UserRole.ADMIN,
+      score: 0
+    };
+    setCurrentUser(adminUser);
+    // 관리자 세션 저장
+    if (currentRoomId) {
+      saveSession(currentRoomId, adminUser);
+    }
+  }, [currentRoomId, saveSession]);
+
   // 세션 복원
   const restoreSession = useCallback(async (): Promise<boolean> => {
     try {
@@ -807,6 +824,7 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     revealResult,
     nextRound,
     skipToNextHero,
+    switchToAdmin,
     refreshRoomList,
     restoreSession,
     clearSession
