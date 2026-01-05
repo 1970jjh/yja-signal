@@ -336,8 +336,42 @@ const TraineeView: React.FC<Props> = ({
               <div className="space-y-4">
                 <div className="bg-black text-white p-6 border-4 border-black text-center">
                   <p className="text-xl font-black">선택 완료: {heroAnswer}</p>
-                  <p className="text-sm opacity-70 mt-1">팀원들이 맞추는 중...</p>
                 </div>
+
+                {/* 팀원 선택 현황 */}
+                <div className="bg-gray-100 border-4 border-black p-4">
+                  <p className="font-black text-lg mb-3 text-center">📋 팀원 선택 현황</p>
+                  <div className="space-y-2">
+                    {teamMembers
+                      .filter(member => member.id !== user.id)
+                      .map(member => {
+                        const memberAnswer = memberAnswers[user.team]?.[member.id];
+                        return (
+                          <div
+                            key={member.id}
+                            className={`flex justify-between items-center p-2 border-2 border-black ${
+                              memberAnswer ? 'bg-white' : 'bg-gray-200'
+                            }`}
+                          >
+                            <span className="font-bold">{member.name}</span>
+                            {memberAnswer ? (
+                              <span className={`font-black text-xl px-3 py-1 border-2 border-black ${
+                                memberAnswer === 'O' ? 'bg-emerald-400' : 'bg-rose-400'
+                              }`}>
+                                {memberAnswer}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-sm">대기중...</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    {teamMembers.filter(m => m.id !== user.id).length === 0 && (
+                      <p className="text-center text-gray-500">팀원이 없습니다</p>
+                    )}
+                  </div>
+                </div>
+
                 <button
                   onClick={() => onRevealResult(user.team)}
                   className="w-full py-4 brutal-button bg-yellow-400 hover:bg-yellow-500 font-black text-lg border-4 border-black"

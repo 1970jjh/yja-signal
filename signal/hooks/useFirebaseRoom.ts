@@ -435,14 +435,42 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     }
   }, [currentRoomId, refreshRoomList]);
 
-  // 방 초기화
+  // 방 초기화 (방은 유지하고 참가자와 게임 상태만 초기화)
   const resetRoom = useCallback(async () => {
-    if (currentRoomId) {
-      await deleteRoom(currentRoomId);
+    if (!currentRoomId) return;
+
+    try {
+      const roomRef = ref(database, `rooms/${currentRoomId}`);
+
+      // 참가자 삭제 및 게임 상태 초기화
+      await update(roomRef, {
+        participants: null,
+        gameState: {
+          isStarted: false,
+          isFinished: false,
+          startTime: null,
+          currentHeroId: {},
+          heroHistory: {},
+          scores: {},
+          currentQuestionIndex: {},
+          questionHistory: {},
+          heroAnswers: {},
+          memberAnswers: {},
+          roundResults: {},
+          answeredInRound: {}
+        }
+      });
+
+      // 관리자 상태는 유지 (currentUser가 관리자면 유지)
+      if (currentUser?.role !== UserRole.ADMIN) {
+        setCurrentUser(null);
+        clearSession();
+      }
+    } catch (err) {
+      console.error('Failed to reset room:', err);
+      setError('방 초기화에 실패했습니다.');
     }
-    setCurrentUser(null);
-    setCurrentRoomId(null);
-  }, [currentRoomId, deleteRoom]);
+  }, [currentRoomId, currentUser, clearSession]);
 
   // 게임 시작 - 각 팀별로 랜덤 주인공 선정
   const startGame = useCallback(async () => {
