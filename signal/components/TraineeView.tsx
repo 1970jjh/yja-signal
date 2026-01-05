@@ -492,10 +492,10 @@ const TraineeView: React.FC<Props> = ({
               /* 결과 공개 전 - 결과공개 버튼 */
               <div className="space-y-4">
                 {/* 나의 선택 */}
-                <div className="bg-gray-100 border-4 border-black p-4">
-                  <p className="font-black text-lg mb-3 text-center">⭐ 나의 선택</p>
-                  <div className="flex justify-between items-center p-2 bg-white border-2 border-black">
-                    <span className="font-bold">주인공 (나)</span>
+                <div className="bg-slate-800 border-4 border-black p-4">
+                  <p className="font-black text-lg mb-3 text-center text-white">⭐ 나의 선택</p>
+                  <div className="flex justify-between items-center p-2 bg-slate-700 border-2 border-slate-600">
+                    <span className="font-bold text-white">주인공 (나)</span>
                     <span className={`font-black text-xl px-3 py-1 border-2 border-black ${
                       heroAnswer === 'O' ? 'bg-emerald-400' : 'bg-rose-400'
                     }`}>
