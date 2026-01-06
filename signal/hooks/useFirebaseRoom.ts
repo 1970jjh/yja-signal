@@ -44,6 +44,7 @@ interface UseFirebaseRoomReturn {
   skipToNextHero: (team: string) => void; // 관리자용 순서넘기기
   switchToAdmin: () => void; // 참가자에서 관리자로 전환
   updateTeamCount: (newTeamCount: number) => Promise<boolean>; // 팀 수 변경
+  updateQuestions: (newQuestions: string[]) => Promise<boolean>; // 질문 수정
 
   refreshRoomList: () => Promise<void>;
   restoreSession: () => Promise<boolean>; // 세션 복원
@@ -804,6 +805,38 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     }
   }, [currentRoomId, roomConfig, gameState.isStarted, gameState.isFinished]);
 
+  // 질문 수정 (게임 시작 전에만 가능)
+  const updateQuestions = useCallback(async (newQuestions: string[]): Promise<boolean> => {
+    if (!currentRoomId || !roomConfig) return false;
+
+    // 게임이 이미 시작됐으면 변경 불가
+    if (gameState.isStarted || gameState.isFinished) {
+      setError('게임이 시작된 후에는 질문을 변경할 수 없습니다.');
+      return false;
+    }
+
+    // 유효성 검사 (최소 1개 이상)
+    if (newQuestions.length === 0) {
+      setError('최소 1개 이상의 질문이 필요합니다.');
+      return false;
+    }
+
+    try {
+      const roomRef = ref(database, `rooms/${currentRoomId}`);
+
+      // config의 questions 업데이트
+      await update(roomRef, {
+        'config/questions': newQuestions
+      });
+
+      return true;
+    } catch (err) {
+      console.error('Failed to update questions:', err);
+      setError('질문 수정에 실패했습니다.');
+      return false;
+    }
+  }, [currentRoomId, roomConfig, gameState.isStarted, gameState.isFinished]);
+
   // 세션 복원
   const restoreSession = useCallback(async (): Promise<boolean> => {
     try {
@@ -887,6 +920,7 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     skipToNextHero,
     switchToAdmin,
     updateTeamCount,
+    updateQuestions,
     refreshRoomList,
     restoreSession,
     clearSession
