@@ -11,6 +11,7 @@ interface Props {
   onReset: () => void;
   onSkipHero: (team: string) => void;
   onLogout: () => void;
+  onUpdateTeamCount: (newTeamCount: number) => Promise<boolean>;
 }
 
 const AdminView: React.FC<Props> = ({
@@ -21,13 +22,16 @@ const AdminView: React.FC<Props> = ({
   onStop,
   onReset,
   onSkipHero,
-  onLogout
+  onLogout,
+  onUpdateTeamCount
 }) => {
 
   const traineeParticipants = participants.filter(p => p.role === UserRole.TRAINEE);
 
   // 모달 상태
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
+  const [showTeamCountModal, setShowTeamCountModal] = useState(false);
+  const [newTeamCount, setNewTeamCount] = useState(roomConfig?.teamCount || 4);
 
   // 안전하게 gameState 가져오기
   const currentHeroId = gameState?.currentHeroId || {};
@@ -96,15 +100,26 @@ const AdminView: React.FC<Props> = ({
 
         <div className="flex gap-4">
           {!gameState?.isStarted && !gameState?.isFinished ? (
-            <button
-              onClick={onStart}
-              disabled={traineeParticipants.length === 0}
-              className={`px-8 py-4 brutal-button ${
-                traineeParticipants.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'brutal-button-success'
-              }`}
-            >
-              게임 시작
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  setNewTeamCount(roomConfig?.teamCount || 4);
+                  setShowTeamCountModal(true);
+                }}
+                className="px-6 py-4 brutal-button bg-indigo-500 text-white hover:bg-indigo-600"
+              >
+                팀 수정
+              </button>
+              <button
+                onClick={onStart}
+                disabled={traineeParticipants.length === 0}
+                className={`px-8 py-4 brutal-button ${
+                  traineeParticipants.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'brutal-button-success'
+                }`}
+              >
+                게임 시작
+              </button>
+            </>
           ) : (
             <button
               onClick={onStop}
@@ -374,6 +389,82 @@ const AdminView: React.FC<Props> = ({
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* 팀 수정 모달 */}
+      {showTeamCountModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setShowTeamCountModal(false)}
+        >
+          <div
+            className="brutal-card bg-white p-8 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6 border-b-4 border-black pb-4">
+              <h2 className="text-2xl font-black">팀 수 수정</h2>
+              <button
+                onClick={() => setShowTeamCountModal(false)}
+                className="brutal-button px-4 py-2 bg-slate-200 hover:bg-slate-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="brutal-inset p-4 bg-yellow-50">
+                <p className="text-sm text-gray-600 mb-1">현재 팀 수</p>
+                <p className="font-black text-2xl">{roomConfig?.teamCount}개 팀</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-black text-black mb-2">새로운 팀 수 (2~10)</label>
+                <input
+                  type="number"
+                  value={newTeamCount}
+                  onChange={(e) => setNewTeamCount(parseInt(e.target.value) || 2)}
+                  min={2}
+                  max={10}
+                  className="w-full brutal-input font-black text-xl text-center"
+                />
+              </div>
+
+              <div className="brutal-inset p-3 bg-amber-50 text-sm">
+                <p className="font-bold text-amber-800">⚠️ 주의사항</p>
+                <ul className="text-amber-700 mt-1 space-y-1">
+                  <li>• 게임 시작 전에만 변경 가능합니다</li>
+                  <li>• 변경 시 참가자 화면에 즉시 반영됩니다</li>
+                  <li>• 기존에 선택된 팀 번호가 사라지면 참가자가 재선택해야 합니다</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setShowTeamCountModal(false)}
+                  className="flex-1 px-6 py-3 brutal-button bg-slate-200 hover:bg-slate-300"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={async () => {
+                    const success = await onUpdateTeamCount(newTeamCount);
+                    if (success) {
+                      setShowTeamCountModal(false);
+                    }
+                  }}
+                  disabled={newTeamCount === roomConfig?.teamCount}
+                  className={`flex-1 px-6 py-3 brutal-button ${
+                    newTeamCount === roomConfig?.teamCount
+                      ? 'bg-slate-300 cursor-not-allowed text-slate-500'
+                      : 'bg-indigo-500 text-white hover:bg-indigo-600'
+                  }`}
+                >
+                  변경하기
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

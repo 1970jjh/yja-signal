@@ -43,6 +43,7 @@ interface UseFirebaseRoomReturn {
   nextRound: (team: string) => void;
   skipToNextHero: (team: string) => void; // 관리자용 순서넘기기
   switchToAdmin: () => void; // 참가자에서 관리자로 전환
+  updateTeamCount: (newTeamCount: number) => Promise<boolean>; // 팀 수 변경
 
   refreshRoomList: () => Promise<void>;
   restoreSession: () => Promise<boolean>; // 세션 복원
@@ -771,6 +772,38 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     }
   }, [currentRoomId, saveSession]);
 
+  // 팀 수 변경 (게임 시작 전에만 가능)
+  const updateTeamCount = useCallback(async (newTeamCount: number): Promise<boolean> => {
+    if (!currentRoomId || !roomConfig) return false;
+
+    // 게임이 이미 시작됐으면 변경 불가
+    if (gameState.isStarted || gameState.isFinished) {
+      setError('게임이 시작된 후에는 팀 수를 변경할 수 없습니다.');
+      return false;
+    }
+
+    // 유효성 검사 (2~10개)
+    if (newTeamCount < 2 || newTeamCount > 10) {
+      setError('팀 수는 2~10개 사이여야 합니다.');
+      return false;
+    }
+
+    try {
+      const roomRef = ref(database, `rooms/${currentRoomId}`);
+
+      // config의 teamCount 업데이트
+      await update(roomRef, {
+        'config/teamCount': newTeamCount
+      });
+
+      return true;
+    } catch (err) {
+      console.error('Failed to update team count:', err);
+      setError('팀 수 변경에 실패했습니다.');
+      return false;
+    }
+  }, [currentRoomId, roomConfig, gameState.isStarted, gameState.isFinished]);
+
   // 세션 복원
   const restoreSession = useCallback(async (): Promise<boolean> => {
     try {
@@ -853,6 +886,7 @@ export const useFirebaseRoom = (): UseFirebaseRoomReturn => {
     nextRound,
     skipToNextHero,
     switchToAdmin,
+    updateTeamCount,
     refreshRoomList,
     restoreSession,
     clearSession
