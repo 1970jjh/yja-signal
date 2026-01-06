@@ -12,6 +12,7 @@ interface Props {
   onSkipHero: (team: string) => void;
   onLogout: () => void;
   onUpdateTeamCount: (newTeamCount: number) => Promise<boolean>;
+  onUpdateQuestions: (newQuestions: string[]) => Promise<boolean>;
 }
 
 const AdminView: React.FC<Props> = ({
@@ -23,7 +24,8 @@ const AdminView: React.FC<Props> = ({
   onReset,
   onSkipHero,
   onLogout,
-  onUpdateTeamCount
+  onUpdateTeamCount,
+  onUpdateQuestions
 }) => {
 
   const traineeParticipants = participants.filter(p => p.role === UserRole.TRAINEE);
@@ -32,6 +34,8 @@ const AdminView: React.FC<Props> = ({
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [showTeamCountModal, setShowTeamCountModal] = useState(false);
   const [newTeamCount, setNewTeamCount] = useState(roomConfig?.teamCount || 4);
+  const [showQuestionsModal, setShowQuestionsModal] = useState(false);
+  const [editingQuestions, setEditingQuestions] = useState('');
 
   // 안전하게 gameState 가져오기
   const currentHeroId = gameState?.currentHeroId || {};
@@ -109,6 +113,15 @@ const AdminView: React.FC<Props> = ({
                 className="px-6 py-4 brutal-button bg-indigo-500 text-white hover:bg-indigo-600"
               >
                 팀 수정
+              </button>
+              <button
+                onClick={() => {
+                  setEditingQuestions(roomConfig?.questions?.join('\n\n') || '');
+                  setShowQuestionsModal(true);
+                }}
+                className="px-6 py-4 brutal-button bg-purple-500 text-white hover:bg-purple-600"
+              >
+                질문 수정
               </button>
               <button
                 onClick={onStart}
@@ -462,6 +475,89 @@ const AdminView: React.FC<Props> = ({
                   }`}
                 >
                   변경하기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 질문 수정 모달 */}
+      {showQuestionsModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setShowQuestionsModal(false)}
+        >
+          <div
+            className="brutal-card bg-white p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6 border-b-4 border-black pb-4">
+              <h2 className="text-2xl font-black">질문 수정</h2>
+              <button
+                onClick={() => setShowQuestionsModal(false)}
+                className="brutal-button px-4 py-2 bg-slate-200 hover:bg-slate-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="brutal-inset p-4 bg-purple-50">
+                <p className="text-sm text-gray-600 mb-1">현재 질문 수</p>
+                <p className="font-black text-2xl">{roomConfig?.questions?.length || 0}개</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-black text-black mb-2">질문 목록 (빈 줄로 문항 구분)</label>
+                <textarea
+                  rows={15}
+                  value={editingQuestions}
+                  onChange={(e) => setEditingQuestions(e.target.value)}
+                  placeholder="질문 1 내용 (여러 줄 가능)
+
+질문 2 내용 (여러 줄 가능)
+
+질문 3 내용..."
+                  className="w-full brutal-input text-sm leading-relaxed"
+                />
+                <p className="text-xs text-gray-500 mt-1">* 긴 질문은 여러 줄 작성 가능, 문항 사이에 빈 줄(엔터 두 번)로 구분</p>
+              </div>
+
+              <div className="brutal-inset p-3 bg-amber-50 text-sm">
+                <p className="font-bold text-amber-800">⚠️ 주의사항</p>
+                <ul className="text-amber-700 mt-1 space-y-1">
+                  <li>• 게임 시작 전에만 변경 가능합니다</li>
+                  <li>• 변경 시 즉시 반영됩니다</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setShowQuestionsModal(false)}
+                  className="flex-1 px-6 py-3 brutal-button bg-slate-200 hover:bg-slate-300"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={async () => {
+                    const newQuestions = editingQuestions
+                      .split(/\n\n+/)
+                      .map(q => q.trim())
+                      .filter(q => q !== '');
+                    const success = await onUpdateQuestions(newQuestions);
+                    if (success) {
+                      setShowQuestionsModal(false);
+                    }
+                  }}
+                  disabled={editingQuestions.trim() === ''}
+                  className={`flex-1 px-6 py-3 brutal-button ${
+                    editingQuestions.trim() === ''
+                      ? 'bg-slate-300 cursor-not-allowed text-slate-500'
+                      : 'bg-purple-500 text-white hover:bg-purple-600'
+                  }`}
+                >
+                  저장하기
                 </button>
               </div>
             </div>
