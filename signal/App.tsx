@@ -32,6 +32,7 @@ const App: React.FC = () => {
     nextRound,
     skipToNextHero,
     switchToAdmin,
+    updateTeamCount,
     refreshRoomList,
     restoreSession,
     clearSession
@@ -102,6 +103,11 @@ const App: React.FC = () => {
     skipToNextHero(team);
   };
 
+  // 팀 수 변경 (관리자용)
+  const handleUpdateTeamCount = async (newTeamCount: number): Promise<boolean> => {
+    return await updateTeamCount(newTeamCount);
+  };
+
   // 방 나가기 (참가자용)
   const handleLeaveRoom = () => {
     leaveRoom();
@@ -163,6 +169,7 @@ const App: React.FC = () => {
           onReset={resetRoom}
           onSkipHero={handleSkipHero}
           onLogout={handleAdminLogout}
+          onUpdateTeamCount={handleUpdateTeamCount}
         />
       ) : (
         <TraineeView
