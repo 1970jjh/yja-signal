@@ -36,7 +36,7 @@ const WelcomeView: React.FC<Props> = ({
   const [roomName, setRoomName] = useState('');
   const [adminTeamCount, setAdminTeamCount] = useState(4);
   const [duration, setDuration] = useState(10);
-  const [questions, setQuestions] = useState(INITIAL_QUESTIONS.join('\n'));
+  const [questions, setQuestions] = useState(INITIAL_QUESTIONS.join('\n\n'));
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -99,7 +99,7 @@ const WelcomeView: React.FC<Props> = ({
         roomName,
         teamCount: adminTeamCount,
         durationMinutes: duration,
-        questions: questions.split('\n').filter(q => q.trim() !== '')
+        questions: questions.split(/\n\n+/).map(q => q.trim()).filter(q => q !== '')
       });
     } catch (err) {
       console.error('Room creation error:', err);
@@ -442,13 +442,19 @@ const WelcomeView: React.FC<Props> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-black text-black mb-2 uppercase">질문 목록 (한 줄에 하나씩)</label>
+            <label className="block text-sm font-black text-black mb-2 uppercase">질문 목록 (빈 줄로 문항 구분)</label>
             <textarea
-              rows={6}
+              rows={10}
               value={questions}
               onChange={(e) => setQuestions(e.target.value)}
+              placeholder="질문 1 내용 (여러 줄 가능)
+
+질문 2 내용 (여러 줄 가능)
+
+질문 3 내용..."
               className="w-full brutal-input text-sm leading-relaxed"
             />
+            <p className="text-xs text-gray-500 mt-1">* 긴 질문은 여러 줄 작성 가능, 문항 사이에 빈 줄(엔터 두 번)로 구분</p>
           </div>
 
           {error && (
