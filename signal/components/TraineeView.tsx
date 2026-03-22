@@ -171,9 +171,8 @@ const TraineeView: React.FC<Props> = ({
   // 팀 전체 점수
   const teamTotalScore = teamMembers.reduce((sum, m) => sum + (individualScores[m.id] || 0), 0);
 
-  // 답변 제출
+  // 답변 제출 (수정 가능)
   const handleAnswer = (answer: 'O' | 'X') => {
-    if (hasAnswered) return;
     setHasAnswered(true);
     onMemberAnswer(user.id, user.team, answer);
     if (navigator.vibrate) navigator.vibrate(100);
@@ -491,9 +490,12 @@ const TraineeView: React.FC<Props> = ({
             ) : !isResultRevealed ? (
               /* 결과 공개 전 - 결과공개 버튼 */
               <div className="space-y-4">
-                {/* 나의 선택 */}
-                <div className="bg-slate-800 border-4 border-black p-4">
-                  <p className="font-black text-lg mb-3 text-center text-white">⭐ 나의 선택</p>
+                {/* 나의 선택 - 터치하면 다시 선택 가능 */}
+                <div
+                  className="bg-slate-800 border-4 border-black p-4 cursor-pointer active:scale-95 transition-transform"
+                  onClick={() => onHeroAction(heroAnswer === 'O' ? 'X' : 'O')}
+                >
+                  <p className="font-black text-lg mb-3 text-center text-white">⭐ 나의 선택 <span className="text-sm font-normal opacity-70">(터치하면 변경)</span></p>
                   <div className="flex justify-between items-center p-2 bg-slate-700 border-2 border-slate-600">
                     <span className="font-bold text-white">주인공 (나)</span>
                     <span className={`font-black text-xl px-3 py-1 border-2 border-black ${
@@ -623,9 +625,12 @@ const TraineeView: React.FC<Props> = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="bg-black text-white p-6 border-4 border-black text-center">
+                    <div
+                      className="bg-black text-white p-6 border-4 border-black text-center cursor-pointer active:scale-95 transition-transform"
+                      onClick={() => setHasAnswered(false)}
+                    >
                       <p className="text-xl font-black">내 선택: {myAnswer}</p>
-                      <p className="text-sm opacity-70 mt-1">주인공이 결과를 공개하면 확인됩니다</p>
+                      <p className="text-sm opacity-70 mt-1">터치하면 다시 선택할 수 있어요</p>
                     </div>
                   </div>
                 )}
