@@ -1,6 +1,18 @@
 
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, onValue, update, remove, push } from 'firebase/database';
+import {
+  getDatabase,
+  ref,
+  set,
+  get,
+  onValue,
+  update,
+  remove,
+  push,
+  runTransaction,
+  onDisconnect,
+  serverTimestamp
+} from 'firebase/database';
 
 // Firebase 설정
 const firebaseConfig = {
@@ -16,4 +28,4 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
-export { database, ref, set, get, onValue, update, remove, push };
+export { database, ref, set, get, onValue, update, remove, push, runTransaction, onDisconnect, serverTimestamp };
